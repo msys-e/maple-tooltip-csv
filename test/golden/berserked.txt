@@ -1,0 +1,21 @@
+# golden: berserked (行順=セグメント順, スペースは整列時無視, §=無視アイコン, 行頭!=スキップ)
+Berserked
+Untradable
+Currently Equipped
+Accessory
+Face Acc
+Required Job Shared
+Required Level Lv. 160
+Set Effect§ Pitched Boss Set
+STR +216 (10 +131 +75)
+DEX +141 (10 +131)
+INT +171 (10 +131 +30)
+LUK +141 (10 +131)
+All Stats +6% (0% +6%)
+Attack Power +106 (10 +92 +4)
+Magic ATT +102 (10 +92)
+Defense +606 (200 +406)
+§Potential : Legendary
+All Stats +10%
+STR: +10%
+STR: +10%

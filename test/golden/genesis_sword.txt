@@ -1,0 +1,28 @@
+# golden: genesis_sword
+Genesis Sword
+Untradable
+Currently Equipped
+Weapon One-handed
+Sword
+Required Job Ren
+Required Level Lv. 200
+Set Effect§ Eternal Set (Warrior), Lucky Item
+Usable Skill Tanadian Ruin, Aeonian Rise
+Attack Speed Stage 6
+STR +295 (150 +145)
+DEX +325 (150 +145 +30)
+LUK +85 (0 +85)
+Max HP +255 (0 +255)
+Max MP +255 (0 +255)
+Attack Power +778 (340 +228 +210)
+Boss Damage +40% (30% +10%)
+Enemy DEF Ignored +20%
+Star Force Can't Enhance
+§Potential : Legendary
+Attack Power +13%
+Boss Damage +30%
+Attack Power +13%
+§Soul : Magnificent Verus Hilla Soul
+Attack Power +3%
+Grants [Red Witch] Skill
+One-of-a-kind Item, Can't Equip Duplicates
