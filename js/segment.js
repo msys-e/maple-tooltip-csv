@@ -11,29 +11,59 @@ const ICON_MIN = 55;       // これ以上の大きさの成分はアイコン�
 export function segmentLines(img, bbox) {
   const cls = classifyPixels(img, bbox);
   const { map, w, h } = cls;
-  // テキストマスク = 色分類ヒット OR 輝度155以上。
-  // 画面共有(YUV)では色情報が潰れて色分類から漏れるが、輝度は保存されるため
-  // 「形は輝度で取り、色はグリフ平均で決める」構成にする
+  // テキストマスク = (色分類ヒット OR 輝度155以上) かつ 局所背景より十分明るい。
+  // 画面共有(YUV)では色情報が潰れて色分類から漏れるが輝度は保存される。
+  // さらに背後のエフェクト光が透けると背景自体が輝度155を超えてマスクが飽和し、
+  // 文字が背景と連結して巨大成分になり消えるため、16pxタイルごとの
+  // 背景輝度(下位25%点)+55 を下回る画素は背景とみなして除外する。
+  // 通常の暗い背景ではこのゲートは非活性(従来と同一挙動)
   const { x = 0, y = 0 } = bbox || {};
-  const mask = new Uint8Array(w * h);
   const d = img.data;
+  const lumAt = (sx, sy) => {
+    const p = ((y + sy) * img.width + (x + sx)) * 4;
+    return d[p] * 0.299 + d[p + 1] * 0.587 + d[p + 2] * 0.114;
+  };
+  const T = 16;
+  const tw = Math.ceil(w / T), th = Math.ceil(h / T);
+  const bgTile = new Float64Array(tw * th);
+  for (let ty = 0; ty < th; ty++) {
+    for (let tx = 0; tx < tw; tx++) {
+      const samples = [];
+      for (let sy = ty * T; sy < Math.min(h, (ty + 1) * T); sy += 2) {
+        for (let sx = tx * T; sx < Math.min(w, (tx + 1) * T); sx += 2) {
+          samples.push(lumAt(sx, sy));
+        }
+      }
+      samples.sort((a, b) => a - b);
+      // 文字密度が高いタイルでは高めの分位点が文字画素に乗るため下位10%点を使う
+      bgTile[ty * tw + tx] = samples[Math.floor(samples.length * 0.1)] ?? 0;
+    }
+  }
+  const mask = new Uint8Array(w * h);
   for (let yy = 0; yy < h; yy++) {
     let src = ((y + yy) * img.width + x) * 4;
     let dst = yy * w;
     for (let xx = 0; xx < w; xx++, src += 4, dst++) {
-      if (map[dst]) { mask[dst] = 1; continue; }
       const lum = d[src] * 0.299 + d[src + 1] * 0.587 + d[src + 2] * 0.114;
-      if (lum >= 155) mask[dst] = 1;
+      if (!map[dst] && lum < 155) continue;
+      const bg = bgTile[((yy / T) | 0) * tw + ((xx / T) | 0)];
+      if (lum >= bg + 55) mask[dst] = 1;
     }
   }
   const comps = connectedComponents(mask, w, h, true);
 
-  // アイコン枠(大成分)を排他ゾーンに
+  // アイコン枠(大成分)を排他ゾーンに。
+  // 条件はほぼ正方形(55-115px)+枠らしい塗り率に限定する。
+  // エフェクトの細い光跡が182x222等の巨大まばら成分になり、アイコン枠と誤認して
+  // ステータス文字を丸ごと飲み込む事故があった(Mitraフレームで実測)
   const zones = [];
   for (const c of comps) {
     const cw = c.x1 - c.x0 + 1, ch = c.y1 - c.y0 + 1;
-    if (cw >= ICON_MIN && ch >= ICON_MIN) {
-      zones.push({ x0: c.x0 - 4, y0: c.y0 - 4, x1: c.x1 + 4, y1: c.y1 + 4 });
+    if (cw >= ICON_MIN && ch >= ICON_MIN && cw <= 115 && ch <= 115 && Math.abs(cw - ch) <= 30) {
+      const fill = c.area / (cw * ch);
+      if (fill >= 0.03) { // 光跡(fill~1%)だけ除外。本物のアイコン枠は中身と連結してfillが高いこともある
+        zones.push({ x0: c.x0 - 4, y0: c.y0 - 4, x1: c.x1 + 4, y1: c.y1 + 4 });
+      }
     }
   }
   const inZone = (c) => {

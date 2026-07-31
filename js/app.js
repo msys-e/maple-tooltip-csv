@@ -68,7 +68,7 @@ const TABLE_COLS = [
   ['dex_bonus', 'DEX転生', 'c-bonus'],
   ['luk_total', 'LUK', ''],
   ['luk_bonus', 'LUK転生', 'c-bonus'],
-  ['all_stats_pct_total', 'ALLstats', ''],
+  ['all_stats_pct_total', 'ALLstats', 'c-bonus'],
   ['attack_power_total', '攻撃力', ''],
   ['attack_power_bonus', '攻撃力転生', 'c-bonus'],
   ['magic_att_total', '魔力', ''],
