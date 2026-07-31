@@ -249,7 +249,7 @@ export function countStars(img, bbox) {
     if (j - i >= 2) n += j - i;
     i = j;
   }
-  // ★1装備の救済: ブロブがちょうど1個だけなら本物の星とみなす(散在ノイズなら複数出る)
-  if (n === 0 && blobs.length === 1) n = 1;
+  // 注: 孤立ブロブ1個は数えない。★1装備は0扱いになるが、
+  //     背景ノイズ1個を星と誤認するケース(full_mitraで実測)の方が害が大きい
   return n;
 }
