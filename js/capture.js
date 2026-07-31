@@ -1,7 +1,7 @@
 // 画面共有キャプチャループ + ペースト/D&D 受け口
 // 安定判定(同一aHash連続)済みのツールチップcropをコールバックに渡す
 import { findTooltip } from './detect.js';
-import { aHash } from './imgproc.js';
+import { aHash, hammingHex } from './imgproc.js';
 
 const POLL_MS = 220;
 const STABLE_COUNT = 2; // 同一ハッシュがこの回数連続したら確定
@@ -66,8 +66,13 @@ export class CaptureController {
     }
     // 安定判定はaHash単独(bbox±1pxのジッタで安定カウンタがリセットされないように)、
     // 処理済みキーには矩形サイズも含める(aHash衝突で別アイテムが握り潰されるのを軽減)
-    const ah = aHash(img, found);
-    if (ah === this.lastHash) this.stableN++;
+    // ★23以上の星キラキラはアニメーションして毎フレーム変わるため、
+    // ハッシュ対象は星帯を除いた下側(テキスト領域)に限定する
+    const skip = Math.min(120, Math.floor(found.h / 3));
+    const stableRegion = { x: found.x, y: found.y + skip, w: found.w, h: found.h - skip };
+    const ah = aHash(img, stableRegion);
+    // 本文領域に流れてきたキラキラ粒子で数ビット揺れても「同一」とみなす
+    if (this.lastHash && hammingHex(ah, this.lastHash) <= 6) this.stableN++;
     else this.stableN = 0;
     this.lastHash = ah;
     const procKey = `${ah}:${found.w}x${found.h}`;

@@ -339,6 +339,16 @@ $('btn-unknown-frame').addEventListener('click', (e) => {
   savePng(lastUnknownFrame, `unknown_frame_${Date.now()}.png`);
   toast('未知発生フレームを保存しました');
 });
+$('btn-frame-burst').addEventListener('click', () => {
+  // キラキラ等のアニメーション診断用: 3秒間、500ms間隔で6枚保存
+  let shot = 0;
+  toast('3秒間バースト保存します — 装備にホバーしてください', 'warn');
+  const t = setInterval(() => {
+    if (capture.lastFrame) savePng(capture.lastFrame, `burst_${Date.now()}_${shot}.png`);
+    if (++shot >= 6) { clearInterval(t); toast('バースト保存完了(6枚)'); }
+  }, 500);
+});
+
 $('btn-frame-save-delay').addEventListener('click', () => {
   // ボタンを押してからゲームへ移ってホバーする猶予を作る
   let left = 3;
