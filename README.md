@@ -61,6 +61,11 @@ node test/run.mjs parse      # パース結果のgolden比較
 認識ロジックを触ったら `npm test` (ocr+parse) が緑のままであることを確認する。
 `node test/diag.mjs <frame.png>` でライブフレームの未知グリフを解析できる。
 
+## Contributing / License
+
+Issue・PR歓迎。ライセンスはMIT。
+認識ロジックへの変更は `npm test` (25サンプルのgolden回帰) が緑であることを確認してください。
+
 ## 制限
 
 - 英語クライアントのツールチップのみ学習済み
