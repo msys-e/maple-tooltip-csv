@@ -394,10 +394,17 @@ $('btn-clear').addEventListener('click', () => {
 // ---------- 起動 ----------
 $('btn-bank-reset').addEventListener('click', async () => {
   if (!confirm('このブラウザで学習した文字ラベル(手動ラベル+自動学習)を全て消去し、同梱辞書に戻しますか?\n(取得済みアイテムとスナップショットは消えません)')) return;
-  store.saveUserBank({});
+  // 先に同梱辞書の再取得を成功させてから消す(失敗時に旧ラベルが残ったまま
+  // 成功表示になり、onLearnで消したはずのデータが復活するのを防ぐ)
+  let fresh;
   try {
-    bank = new GlyphBank(await (await fetch(`data/glyphbank.json?v=${Date.now()}`)).json());
-  } catch { /* 次回リロードで復旧 */ }
+    fresh = new GlyphBank(await (await fetch(`data/glyphbank.json?v=${Date.now()}`)).json());
+  } catch {
+    toast('同梱辞書の再取得に失敗したためリセットを中止しました', 'err');
+    return;
+  }
+  store.saveUserBank({});
+  bank = fresh;
   installLearnHook();
   updateMeta();
   toast('学習辞書をリセットしました', 'warn');
