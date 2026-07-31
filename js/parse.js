@@ -82,7 +82,8 @@ export function parseTooltip(lines, starCount) {
     if (consumed.has(ln)) continue;
     const text = ln.text.trim();
 
-    const potHead = /^Potential\s*:?\s*(.+)$/.exec(text);
+    // 例: "Potential : Legendary" / "Potential : Epic (Fully Enhanced)" → 等級のみ取る
+    const potHead = /^Potential\s*:?\s*([^(]+?)\s*(?:\(.*)?$/.exec(text);
     if (potHead) {
       item.potential_grade = potHead[1].trim();
       section = 'potential';

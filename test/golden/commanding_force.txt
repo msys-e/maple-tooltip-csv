@@ -1,0 +1,22 @@
+Commanding Force Earring
+Untradable
+Currently Equipped
+Accessory
+Earrings
+Required Job Shared
+Required Level Lv. 200
+Set Effect§ Pitched Boss Set
+STR +237 (7 +145 +85)
+DEX +182 (7 +145 +30)
+INT +152 (7 +145)
+LUK +152 (7 +145)
+All Stats +6% (0% +6%)
+Max HP +500
+Max MP +500
+Attack Power +116 (5 +106 +5)
+Magic ATT +111 (5 +106)
+Defense +312 (100 +212)
+§Potential : Legendary
+STR: +13%
+STR: +10%
+STR: +10%

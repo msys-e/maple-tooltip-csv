@@ -11,7 +11,13 @@ import { GlyphBank, recognizeLines } from '../js/ocr.js';
 import { parseTooltip } from '../js/parse.js';
 import { itemToRow, COLUMNS } from '../js/csv.js';
 
-const SAMPLES = ['berserked', 'dawn_ring', 'genesis_sword', 'full_daybreak', 'full_mitra'];
+const SAMPLES = [
+  'berserked', 'dawn_ring', 'genesis_sword', 'full_daybreak', 'full_mitra',
+  'endless_terror', 'dawn_ring_b', 'superior_gollux', 'magic_eyepatch',
+  'source_of_suffering', 'commanding_force', 'daybreak_pendant', 'dreamy_belt', 'cursed_spellbook',
+  'eternal_helm', 'eternal_armor', 'eternal_pants', 'arcane_shoulder', 'arcane_cape',
+  'arcane_gloves', 'arcane_shoes', 'arcane_shoes_b', 'black_heart',
+];
 const OUT = new URL('./out/', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1');
 const ROOT = new URL('../', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1');
 if (!existsSync(OUT)) mkdirSync(OUT, { recursive: true });
@@ -102,11 +108,12 @@ function alignLine(glyphs, chars, bank) {
       if (score[i][j] === NEG) continue;
       for (let k = 0; k <= 3; k++) {
         if (j + k > m) break;
-        const s = chars.slice(j, j + k).replace(/§/g, '');
+        const raw = chars.slice(j, j + k);
+        const s = raw.replace(/§/g, '');
         let d;
         if (k === 0) d = known === '' ? 2 : known === undefined ? -4 : -12;
         else if (known !== undefined) d = foldIl(known) === foldIl(s) ? 3 : -12;
-        else d = k === 1 ? 0 : -1.5;
+        else d = k === 1 ? (raw === '§' ? 1.5 : 0) : -1.5; // §は「この位置に無視グリフ」の明示なので優遇
         if (score[i][j] + d > score[i + 1][j + k]) {
           score[i + 1][j + k] = score[i][j] + d;
           from[i + 1][j + k] = k;
@@ -163,8 +170,15 @@ if (cmd === 'label') {
           let end = g, sum = 0;
           while (end < glyphs.length && !known[end]) { sum += consume[end]; end++; }
           const runLen = end - g;
-          // 1:1整列 or run長1(両隣が既知なので消費文字が一意)ならコミット
-          if (sum === runLen || runLen === 1) {
+          // コミット条件: 1:1整列 / run長1(消費が一意) /
+          //   run長2で片方が§のみ消費(合字+無視グリフの組。§優遇スコアで整列が一意)
+          let jj2 = j;
+          let hasSoloIcon = false;
+          for (let t = g; t < end; t++) {
+            if (chars.slice(jj2, jj2 + consume[t]) === '§') hasSoloIcon = true;
+            jj2 += consume[t];
+          }
+          if (sum === runLen || runLen === 1 || (runLen === 2 && hasSoloIcon)) {
             for (let t = g; t < end; t++) {
               const label = chars.slice(j, j + consume[t]).replace(/§/g, '');
               j += consume[t];

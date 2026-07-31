@@ -1,0 +1,25 @@
+Dawn Guardian Angel Ring
+Untradable
+Currently Equipped
+Accessory
+Ring
+Required Job Shared
+Required Level Lv. 160
+Set Effect§ Dawn Boss Set
+STR +136 (5 +131)
+DEX +136 (5 +131)
+INT +136 (5 +131)
+LUK +136 (5 +131)
+Max HP +455 (200 +255)
+Max MP +200
+Attack Power +94 (2 +92)
+Magic ATT +94 (2 +92)
+Defense +26 (0 +26)
+Bonus Stats Can't Enhance
+§Potential : Legendary
+All Stats +10%
+STR: +10%
+STR: +10%
+Can't Equip Duplicates, Can't Equip Duplicate
+(Guardian Angel Ring, Dawn Guardian Angel Ring)
+Items

@@ -1,0 +1,19 @@
+Arcane Umbra Knight Gloves
+Untradable
+Currently Equipped
+Armor
+Gloves
+Required Job Warrior
+Required Level Lv. 200
+Set Effect§ Arcane Umbra Set (Warrior)
+STR +221 (40 +145 +36)
+DEX +185 (40 +145)
+INT +72 (0 +72)
+LUK +36 (0 +36)
+All Stats +7% (0% +7%)
+Attack Power +127 (9 +113 +5)
+Magic ATT +106 (0 +106)
+Defense +748 (250 +498)
+§Potential : Legendary
+Critical Damage +8%
+!bottom-cut remnant

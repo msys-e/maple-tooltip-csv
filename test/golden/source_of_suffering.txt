@@ -1,0 +1,23 @@
+Source of Suffering
+Untradable
+Currently Equipped
+Accessory
+Pendant
+Required Job Shared
+Required Level Lv. 160
+Set Effect§ Pitched Boss Set
+STR +206 (10 +131 +65)
+DEX +141 (10 +131)
+INT +141 (10 +131)
+LUK +161 (10 +131 +20)
+All Stats +5% (0% +5%)
+Max HP +255 (0 +255)
+Max HP +5%
+Attack Power +101 (3 +92 +6)
+Magic ATT +95 (3 +92)
+Defense +606 (200 +406)
+§Potential : Legendary
+All Stats +10%
+STR: +10%
+STR: +10%
+Can't Equip Duplicates

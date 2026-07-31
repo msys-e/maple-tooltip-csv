@@ -1,0 +1,21 @@
+!star row remnant
+Arcane Umbra Knight Shoes
+Untradable
+Currently Equipped
+Armor
+Shoes
+Required Job Warrior
+Required Level Lv. 200
+Set Effect§ Arcane Umbra Set (Warrior)
+STR +261 (40 +130 +91)
+DEX +206 (40 +130 +36)
+All Stats +5% (0% +5%)
+Attack Power +96 (9 +87)
+Magic ATT +87 (0 +87)
+Defense +712 (250 +462)
+Speed +34 (10 +18 +6)
+Jump +25 (7 +18)
+§Potential : Legendary
+STR: +13%
+All Stats +7%
+STR: +10%

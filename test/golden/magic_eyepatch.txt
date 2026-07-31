@@ -1,0 +1,20 @@
+Magic Eyepatch
+Untradable
+Currently Equipped
+Accessory
+Eye Acc
+Required Job Shared
+Required Level Lv. 160
+Set Effect§ Pitched Boss Set
+STR +211 (15 +131 +65)
+DEX +146 (15 +131)
+INT +176 (15 +131 +30)
+LUK +181 (15 +131 +35)
+All Stats +4% (0% +4%)
+Attack Power +101 (3 +92 +6)
+Magic ATT +95 (3 +92)
+Defense +898 (300 +598)
+§Potential : Legendary
+All Stats +10%
+STR: +10%
+STR: +10%

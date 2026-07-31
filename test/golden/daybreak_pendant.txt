@@ -1,0 +1,23 @@
+Daybreak Pendant
+Untradable
+Currently Equipped
+Accessory
+Pendant
+Required Job Shared
+Required Level Lv. 140
+Set Effect§ Dawn Boss Set
+STR +175 (8 +103 +64)
+DEX +111 (8 +103)
+INT +111 (8 +103)
+LUK +175 (8 +103 +64)
+All Stats +5% (0% +5%)
+Max HP +255 (0 +255)
+Max HP +5%
+Attack Power +80 (2 +78)
+Magic ATT +80 (2 +78)
+Defense +312 (100 +212)
+§Potential : Legendary
+All Stats +9%
+STR: +12%
+STR: +9%
+Can't Equip Duplicates

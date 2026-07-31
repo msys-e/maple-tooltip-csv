@@ -24,7 +24,8 @@ export function classifyPixel(r, g, b) {
   if (g > 200 && b < 110 && g >= r + 20) return C.GREEN;
   if (g > 160 && b > 100 && g >= r + 60) return C.CYAN;
   if (r > 200 && g >= 90 && g < 175 && b < 95) return C.ORANGE;
-  if (r > 160 && b > 160 && g < 100) return C.PURPLE;
+  // Epic紫テキスト/ブレット実測(176,112,240)。b>200が背景紫ノイズ(~160)との分離線
+  if (b > 200 && r > 140 && g < 150 && b - g > 80) return C.PURPLE;
   return C.NONE;
 }
 

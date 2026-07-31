@@ -1,0 +1,22 @@
+Dreamy Belt
+Untradable
+Currently Equipped
+Accessory
+Belt
+Required Job Shared
+Required Level Lv. 200
+Set Effect§ Pitched Boss Set
+STR +280 (50 +145 +85)
+DEX +225 (50 +145 +30)
+INT +195 (50 +145)
+LUK +195 (50 +145)
+All Stats +6% (0% +6%)
+Max HP +405 (150 +255)
+Max MP +150
+Attack Power +116 (6 +106 +4)
+Magic ATT +112 (6 +106)
+Defense +456 (150 +306)
+§Potential : Legendary
+All Stats +10%
+STR: +10%
+STR: +10%

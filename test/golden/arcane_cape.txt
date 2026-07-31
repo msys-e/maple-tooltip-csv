@@ -1,0 +1,23 @@
+!star row remnant
+Arcane Umbra Knight Cape
+Untradable
+Currently Equipped
+Armor
+Cape
+Required Job Warrior
+Required Level Lv. 200
+Set Effect§ Arcane Umbra Set (Warrior)
+STR +237 (35 +130 +72)
+DEX +195 (35 +130 +30)
+INT +125 (35 +90)
+LUK +167 (35 +90 +42)
+All Stats +6% (0% +6%)
+Max HP +255 (0 +255)
+Max MP +3000 (0 +3000)
+Attack Power +93 (6 +87)
+Magic ATT +93 (6 +87)
+Defense +1269 (450 +819)
+§Potential : Legendary
+STR: +13%
+STR: +13%
+DEX: +10%

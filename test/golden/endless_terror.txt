@@ -1,0 +1,24 @@
+!star row remnant
+Endless Terror
+Untradable
+Currently Equipped
+Accessory
+Ring
+Required Job Shared
+Required Level Lv. 200
+Set Effect§ Pitched Boss Set
+STR +150 (5 +145)
+DEX +150 (5 +145)
+INT +150 (5 +145)
+LUK +150 (5 +145)
+Max HP +505 (250 +255)
+Max MP +250
+Attack Power +110 (4 +106)
+Magic ATT +110 (4 +106)
+Defense +26 (0 +26)
+Bonus Stats Can't Enhance
+§Potential : Legendary
+STR: +13%
+STR: +10%
+All Stats +7%
+!bottom-cut Can't Equip Duplicates

@@ -1,0 +1,17 @@
+Untradable
+Currently Equipped
+Pocket Item
+Required Job Shared
+Required Level Lv. 140 (160 - 20)
+Set Effect§ Pitched Boss Set
+STR +95 (20 +75)
+DEX +40 (10 +30)
+INT +10
+LUK +10
+All Stats +6% (0% +6%)
+Max HP +100
+Max MP +100
+Attack Power +10
+Magic ATT +10
+Can only be equipped in the Pocket slot.
+Star Force Can't Enhance

@@ -1,0 +1,21 @@
+Black Heart§
+Special Item
+Untradable
+Duration: 8/6/202613:53 UTC (Can't Extend)
+Currently Equipped
+Mech Heart
+Required Job Shared
+Required Level Lv. 120
+Set Effect§ Pitched Boss Set
+Rank: 5
+STR +50 (10 +40)
+DEX +50 (10 +40)
+INT +50 (10 +40)
+LUK +50 (10 +40)
+Max HP +100
+Attack Power +77
+Magic ATT +77
+Star Force, Bonus Stats Can't Enhance
+§Potential : Epic (Fully Enhanced)
+Boss Damage +30%
+Ignore Defense +30%

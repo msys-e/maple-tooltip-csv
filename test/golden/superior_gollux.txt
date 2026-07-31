@@ -1,0 +1,26 @@
+!top junk
+Superior Gollux Ring
+Untradable
+Currently Equipped
+Accessory
+Ring
+!Required Job Shared (icon zone ate glyphs)
+Required Level Lv. 150
+Set Effect§ Superior Gollux Set
+STR +127 (10 +117)
+DEX +127 (10 +117)
+INT +127 (10 +117)
+LUK +127 (10 +117)
+Max HP +505 (250 +255)
+Max MP +250
+Attack Power +111 (8 +103)
+Magic ATT +111 (8 +103)
+Defense +479 (150 +329)
+Speed +10
+A ring made from bits of Gollux's core.
+Bonus Stats Can't Enhance
+§Potential : Legendary
+STR: +12%
+All Stats +6%
+STR: +9%
+Can't Equip Duplicates

@@ -392,6 +392,17 @@ $('btn-clear').addEventListener('click', () => {
 });
 
 // ---------- 起動 ----------
+$('btn-bank-reset').addEventListener('click', async () => {
+  if (!confirm('このブラウザで学習した文字ラベル(手動ラベル+自動学習)を全て消去し、同梱辞書に戻しますか?\n(取得済みアイテムとスナップショットは消えません)')) return;
+  store.saveUserBank({});
+  try {
+    bank = new GlyphBank(await (await fetch(`data/glyphbank.json?v=${Date.now()}`)).json());
+  } catch { /* 次回リロードで復旧 */ }
+  installLearnHook();
+  updateMeta();
+  toast('学習辞書をリセットしました', 'warn');
+});
+
 function installLearnHook() {
   // ファジー照合で学習した変種キーをlocalStorageにも残し、次回起動から即ヒットさせる
   bank.onLearn = (key, label) => {

@@ -1,0 +1,22 @@
+!star row remnant
+Eternal Knight Armor
+Untradable
+Currently Equipped
+Armor
+Top
+Required Job Warrior
+Required Level Lv. 250
+Set Effect§ Eternal Set (Warrior)
+STR +332 (50 +159 +123)
+DEX +244 (50 +159 +35)
+LUK +28 (0 +28)
+All Stats +4% (0% +4%)
+Max HP +255 (0 +255)
+Attack Power +126 (6 +120)
+Magic ATT +120 (0 +120)
+Defense +970 (325 +645)
+Enemy DEF Ignored +5%
+§Potential : Legendary
+STR: +13%
+STR: +10%
+All Stats +7%
