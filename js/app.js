@@ -206,7 +206,7 @@ function processTooltip(img, bbox, { silent = false } = {}) {
     try {
       store.saveItems(newItems);
     } catch {
-      toast('保存に失敗しました(localStorage容量を確認)', 'err');
+      if (!silent) toast('保存に失敗しました(localStorage容量を確認)', 'err');
       return 'error'; // itemKeysに入れず、再ホバーでリトライ可能なままにする
     }
   }
@@ -285,7 +285,7 @@ $('btn-capture').addEventListener('click', async () => {
 
 installDropPaste((img) => processImage(img));
 
-$('btn-frame-save').addEventListener('click', () => {
+function saveCurrentFrame() {
   const img = capture.lastFrame;
   if (!img) { toast('共有中のフレームがありません', 'warn'); return; }
   const c = document.createElement('canvas');
@@ -296,6 +296,15 @@ $('btn-frame-save').addEventListener('click', () => {
   a.href = c.toDataURL('image/png');
   a.download = `frame_${Date.now()}.png`;
   a.click();
+}
+$('btn-frame-save').addEventListener('click', saveCurrentFrame);
+$('btn-frame-save-delay').addEventListener('click', () => {
+  // ボタンを押してからゲームへ移ってホバーする猶予を作る
+  let left = 3;
+  toast('3秒後にフレームを保存します — 装備にホバーしてください', 'warn');
+  const t = setInterval(() => {
+    if (--left <= 0) { clearInterval(t); saveCurrentFrame(); toast('フレームを保存しました'); }
+  }, 1000);
 });
 
 // ---------- CSV / スナップショット / エクスポート ----------
@@ -383,14 +392,24 @@ $('btn-clear').addEventListener('click', () => {
 });
 
 // ---------- 起動 ----------
+function installLearnHook() {
+  // ファジー照合で学習した変種キーをlocalStorageにも残し、次回起動から即ヒットさせる
+  bank.onLearn = (key, label) => {
+    const user = store.loadUserBank();
+    user[key] = label;
+    store.saveUserBank(user);
+  };
+}
+
 (async () => {
   try {
-    const res = await fetch('data/glyphbank.json');
+    const res = await fetch(`data/glyphbank.json?v=${Date.now()}`); // 古いキャッシュ対策
     bank = new GlyphBank(await res.json());
   } catch {
     toast('同梱グリフ辞書の読み込みに失敗しました', 'err');
   }
   for (const [k, v] of Object.entries(store.loadUserBank())) bank.add(k, v);
+  installLearnHook();
   render();
   refreshSnapshots();
 })();

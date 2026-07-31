@@ -64,19 +64,22 @@ export class CaptureController {
       this.cb.onInfo(info);
       return;
     }
-    // 矩形サイズも重複キーに含める(aHash衝突で別アイテムが握り潰されるのを軽減)
-    const hash = `${aHash(img, found)}:${found.w}x${found.h}`;
-    if (hash === this.lastHash) this.stableN++;
+    // 安定判定はaHash単独(bbox±1pxのジッタで安定カウンタがリセットされないように)、
+    // 処理済みキーには矩形サイズも含める(aHash衝突で別アイテムが握り潰されるのを軽減)
+    const ah = aHash(img, found);
+    if (ah === this.lastHash) this.stableN++;
     else this.stableN = 0;
-    this.lastHash = hash;
-    if (this.stableN >= STABLE_COUNT && !this.processed.has(hash)) {
-      this.processed.add(hash);
+    this.lastHash = ah;
+    const procKey = `${ah}:${found.w}x${found.h}`;
+    if (this.stableN >= STABLE_COUNT && !this.processed.has(procKey)) {
+      this.processed.add(procKey);
       info.tip = '認識中…';
       this.cb.onInfo(info);
-      this.cb.onTooltip(img, found);
+      const result = this.cb.onTooltip(img, found);
+      if (result === 'error') this.processed.delete(procKey); // 保存失敗は再ホバーでリトライ可能に
       return;
     }
-    info.tip = this.processed.has(hash) ? '取得済み(次の装備へ)' : `検出 (${found.w}x${found.h})`;
+    info.tip = this.processed.has(procKey) ? '取得済み(次の装備へ)' : `検出 (${found.w}x${found.h})`;
     this.cb.onInfo(info);
   }
 }

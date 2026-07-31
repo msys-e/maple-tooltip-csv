@@ -40,13 +40,62 @@ export class GlyphBank {
     const d = decodeKey(key);
     if (!d) return null;
     const cands = this.bySize.get(`${d.w}x${d.h}:${d.flag}`);
-    if (!cands) return null;
-    let best = null, bestD = HAMMING_MAX + 1;
-    for (const c of cands) {
-      const dist = hammingBits(d.bits, c.bits);
-      if (dist < bestD) { bestD = dist; best = c; }
+    if (cands) {
+      let best = null, bestD = HAMMING_MAX + 1;
+      for (const c of cands) {
+        const dist = hammingBits(d.bits, c.bits);
+        if (dist < bestD) { bestD = dist; best = c; }
+      }
+      if (best) return { label: best.label, exact: false, dist: bestD };
     }
-    return best ? { label: best.label, exact: false, dist: bestD } : null;
+    // ファジー照合: 画面共有はエフェクト等の透過背景でAA縁が揺れ、
+    // グリフのbboxが±1pxずれたりビットが数個反転する。サイズ±1×位置ずらしで
+    // 不一致率が低い既知グリフに寄せ、当たったら変種キーとして学習する。
+    const hit = this._fuzzy(d);
+    if (hit) {
+      this.add(key, hit.label);
+      if (this.onLearn) this.onLearn(key, hit.label); // 変種キーの永続化用フック
+      return { label: hit.label, exact: false, fuzzy: true, dist: hit.dist };
+    }
+    return null;
+  }
+
+  _fuzzy(d) {
+    let inkD = 0;
+    for (const b of d.bits) inkD += b;
+    if (inkD < 3) return null; // 極小グリフは誤吸着しやすいので対象外
+    let best = null, bestMis = Infinity;
+    for (let dw = -1; dw <= 1; dw++) {
+      for (let dh = -1; dh <= 1; dh++) {
+        const cands = this.bySize.get(`${d.w + dw}x${d.h + dh}:${d.flag}`);
+        if (!cands) continue;
+        for (const c of cands) {
+          if (c.label === '') continue;
+          const cw = d.w + dw, chh = d.h + dh;
+          for (let ox = -1; ox <= 1; ox++) {
+            for (let oy = -1; oy <= 1; oy++) {
+              let mis = 0;
+              const W = Math.max(d.w, cw + ox), H = Math.max(d.h, chh + oy);
+              for (let y = 0; y < H && mis < bestMis; y++) {
+                for (let x = 0; x < W; x++) {
+                  const a = (x < d.w && y < d.h) ? d.bits[y * d.w + x] : 0;
+                  const cx = x - ox, cy = y - oy;
+                  const b = (cx >= 0 && cy >= 0 && cx < cw && cy < chh) ? c.bits[cy * cw + cx] : 0;
+                  if (a !== b) mis++;
+                }
+              }
+              if (mis < bestMis) { bestMis = mis; best = c; }
+            }
+          }
+        }
+      }
+    }
+    if (!best) return null;
+    let inkB = 0;
+    for (const b of best.bits) inkB += b;
+    const allowed = Math.max(3, Math.ceil(0.18 * Math.max(inkD, inkB)));
+    if (inkD <= 8 && bestMis > 2) return null; // 小型グリフは厳しめ
+    return bestMis <= allowed ? { label: best.label, dist: bestMis } : null;
   }
   toJSON() {
     return { version: 1, glyphs: this.glyphs };

@@ -58,6 +58,7 @@ function lumAt(d, p) {
 function boxFromAnchor(img, a) {
   const { width: w, height: h, data: d } = img;
   const bx = a.x - ANCHOR_OFF_X;
+  if (bx < 0 || bx + TOOLTIP_MIN_W > w) return { error: 'clipped' }; // 左右に見切れている
   const x0 = Math.max(0, bx + 8), x1 = Math.min(w - 1, bx + 308);
   const n = x1 - x0 + 1;
   const rowLum = (y) => {
@@ -85,7 +86,7 @@ function boxFromAnchor(img, a) {
   const d1 = upCands[0] ?? Math.max(0, a.y - 60);
   // 名前ブロック上端(NT): 中央1/3に強い白(名前)か強いオレンジ(Untradable)がある行を
   // d1 から上へ gap≤8 で辿る。背景の淡いハイライトを拾わないよう閾値は強め。
-  const mx0 = bx + 108, mx1 = bx + 218;
+  const mx0 = Math.min(w - 2, bx + 108), mx1 = Math.min(w - 1, bx + 218);
   const nameRow = (y) => {
     let c = 0;
     let p = (y * w + mx0) * 4;
@@ -204,6 +205,10 @@ function findTooltipBlob(img) {
     x: best.x0 * S, y: best.y0 * S,
     w: (best.x1 - best.x0 + 1) * S, h: (best.y1 - best.y0 + 1) * S,
   };
+  // 画像端に接触 = 欠けの可能性。ただし画像自体がツールチップのcropなら許容
+  if (bbox.x <= 1 || bbox.y <= 1 || bbox.x + bbox.w >= img.width - 2 || bbox.y + bbox.h >= img.height - 2) {
+    if (!(bbox.w >= img.width - 8 && bbox.h >= img.height - 8)) return { error: 'clipped', bbox };
+  }
   if (bbox.w < TOOLTIP_MIN_W || bbox.w > TOOLTIP_MAX_W) return { error: 'bad_width', bbox };
   return bbox;
 }
@@ -244,5 +249,7 @@ export function countStars(img, bbox) {
     if (j - i >= 2) n += j - i;
     i = j;
   }
+  // ★1装備の救済: ブロブがちょうど1個だけなら本物の星とみなす(散在ノイズなら複数出る)
+  if (n === 0 && blobs.length === 1) n = 1;
   return n;
 }
