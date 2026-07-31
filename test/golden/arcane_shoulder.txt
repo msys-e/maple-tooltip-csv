@@ -1,6 +1,8 @@
+!top junk1
+!top junk2
 Arcane Umbra Knight Shoulder
 Untradable
-Currently Equipped§
+Currently Equipped
 Shoulder
 Required Job Warrior
 Required Level Lv. 200
@@ -17,4 +19,4 @@ Bonus Stats Can't Enhance
 §Potential : Legendary
 STR: +13%
 All Stats +7%
-STR: +10%§
+STR: +10%

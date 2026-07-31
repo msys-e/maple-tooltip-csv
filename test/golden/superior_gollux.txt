@@ -1,10 +1,13 @@
-!top junk
+!top junk1
+!top junk2
+!top junk3
+!top junk4
 Superior Gollux Ring
 Untradable
 Currently Equipped
 Accessory
 Ring
-!Required Job Shared (icon zone ate glyphs)
+Required Job Shared
 Required Level Lv. 150
 Set Effect§ Superior Gollux Set
 STR +127 (10 +117)

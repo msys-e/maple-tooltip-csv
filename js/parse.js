@@ -73,11 +73,28 @@ export function parseTooltip(lines, starCount) {
   let potIdx = 0;
   const consumed = new Set();
 
-  const textLines = lines.filter((l) => l.text.trim().length > 0);
-  if (textLines.length) {
-    item.item_name = textLines[0].text.trim();
-    consumed.add(textLines[0]);
+  const textLines = lines.filter((l) => !l.isStars && l.text.trim().length > 0);
+  // アイテム名 = 定型キーワード行(Untradable/Currently Equipped/Required Job)の直前の行。
+  // 検出上端が行き過ぎてツールチップ外のジャンク行が先頭に混ざっても名前を取り違えない
+  const kw = /^(Untradable|Currently\s*Equ|Required\s*(Job|Level)|Special\s*Item)/i;
+  const kwIdx = textLines.findIndex((l) => kw.test(l.text.trim()));
+  const nameLine = kwIdx > 0 ? textLines[kwIdx - 1] : (kwIdx === -1 && textLines.length ? textLines[0] : null);
+  item._name_y = nameLine ? nameLine.y0 : -1; // 内部用: 名前行より上=ジャンク領域の境界
+  if (nameLine) {
+    item.item_name = nameLine.text.trim();
+    consumed.add(nameLine);
+    // 名前より上のジャンク行はステータス解釈の対象外にする
+    for (let i = 0; i < textLines.indexOf(nameLine); i++) consumed.add(textLines[i]);
   }
+
+  // 星数: 名前の直上~90px以内の星列のみ数える(それより上のはインベントリ等の誤検知)
+  const starGlyphs = lines
+    .filter((l) => l.isStars && (!nameLine || (l.y1 <= nameLine.y0 && l.y1 >= nameLine.y0 - 90)))
+    .reduce((s, l) => s + l.glyphs.length, 0);
+  // 名前行が特定できたなら星は必ずisStars行由来(無ければ星0)。
+  // バンド由来のフォールバック値は文字を星と誤認し得るため名前不明時のみ使う
+  if (nameLine) item.star_count = starGlyphs;
+  else if (starGlyphs > 0) item.star_count = starGlyphs;
 
   for (const ln of textLines) {
     if (consumed.has(ln)) continue;

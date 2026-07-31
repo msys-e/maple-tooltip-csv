@@ -1,7 +1,7 @@
 // 行分割・グリフ分割
-import { C, COLOR_NAMES, classifyPixels, connectedComponents, componentBitmap, bitmapKey } from './imgproc.js';
+import { C, COLOR_NAMES, classifyPixels, classifyMeanColor, connectedComponents, componentBitmap, bitmapKey } from './imgproc.js';
 
-const STAR_BAND = 44;      // bbox 上部の星帯(行処理から除外)
+const STAR_BAND = 0;       // 星は形状ベースのisStars判定で除外するため固定帯は廃止
 const MAX_TEXT_H = 20;     // これより高い成分は文字でない
 const MAX_TEXT_W = 34;     // これより広い成分は文字でない(合字含む)
 const ICON_MIN = 55;       // これ以上の大きさの成分はアイコン枠とみなし排他ゾーン化
@@ -11,8 +11,21 @@ const ICON_MIN = 55;       // これ以上の大きさの成分はアイコン�
 export function segmentLines(img, bbox) {
   const cls = classifyPixels(img, bbox);
   const { map, w, h } = cls;
+  // テキストマスク = 色分類ヒット OR 輝度155以上。
+  // 画面共有(YUV)では色情報が潰れて色分類から漏れるが、輝度は保存されるため
+  // 「形は輝度で取り、色はグリフ平均で決める」構成にする
+  const { x = 0, y = 0 } = bbox || {};
   const mask = new Uint8Array(w * h);
-  for (let i = 0; i < w * h; i++) mask[i] = map[i] ? 1 : 0;
+  const d = img.data;
+  for (let yy = 0; yy < h; yy++) {
+    let src = ((y + yy) * img.width + x) * 4;
+    let dst = yy * w;
+    for (let xx = 0; xx < w; xx++, src += 4, dst++) {
+      if (map[dst]) { mask[dst] = 1; continue; }
+      const lum = d[src] * 0.299 + d[src + 1] * 0.587 + d[src + 2] * 0.114;
+      if (lum >= 155) mask[dst] = 1;
+    }
+  }
   const comps = connectedComponents(mask, w, h, true);
 
   // アイコン枠(大成分)を排他ゾーンに
@@ -85,22 +98,30 @@ export function segmentLines(img, bbox) {
     }
 
     const lineMid = (ln.y0 + ln.y1) / 2;
-    ln.glyphs = groups.map((g) => {
-      // グループ合成ビットマップ
+    ln.glyphs = groups.filter((g, i) => {
+      // 1pxグリフは'.'(ピリオド)として実在する。両隣から離れた孤立1pxだけノイズ扱い
+      if (g.members.length === 1 && g.members[0].area <= 1) {
+        const prev = groups[i - 1], next = groups[i + 1];
+        const nearPrev = prev && g.x0 - prev.x1 <= 12;
+        const nearNext = next && next.x0 - g.x1 <= 12;
+        if (!nearPrev && !nearNext) return false;
+      }
+      return true;
+    }).map((g) => {
+      // グループ合成ビットマップ + グリフ平均色(クロマ劣化に頑健)
       const gw = g.x1 - g.x0 + 1, gh = g.y1 - g.y0 + 1;
       const bits = new Uint8Array(gw * gh);
-      const colorCount = new Array(COLOR_NAMES.length).fill(0);
+      let sr = 0, sg = 0, sb = 0, np = 0;
       for (const m of g.members) {
         for (const p of m.pixels) {
           const px = p % w, py = (p / w) | 0;
           bits[(py - g.y0) * gw + (px - g.x0)] = 1;
-          colorCount[map[p]]++;
+          const src = ((y + py) * img.width + (x + px)) * 4;
+          sr += d[src]; sg += d[src + 1]; sb += d[src + 2];
+          np++;
         }
       }
-      let color = C.WHITE, mx = 0;
-      for (let i = 1; i < colorCount.length; i++) {
-        if (colorCount[i] > mx) { mx = colorCount[i]; color = i; }
-      }
+      const color = classifyMeanColor(sr / np, sg / np, sb / np);
       const bm = { w: gw, h: gh, bits };
       let key = bitmapKey(bm);
       // 小型グリフ(. , ' - 等)は行内の上下位置で弁別
@@ -126,8 +147,32 @@ export function segmentLines(img, bbox) {
     }
     delete ln.comps;
   }
+  // 星列判定: 黄色の星形ブロブ(5-18px)が3個以上、ほぼ等間隔(9-16px)で並ぶ行。
+  // OCR対象から外し、星数カウントに使う(上端検出が多少ずれても星が文字化けしない)
+  for (const ln of lines) {
+    const gs = ln.glyphs;
+    if (gs.length >= 3 && gs.every((g) => {
+      const gw = g.x1 - g.x0 + 1, gh = g.y1 - g.y0 + 1;
+      return g.color === 'yellow' && gw >= 5 && gw <= 18 && gh >= 5 && gh <= 18;
+    })) {
+      // 星は11-13px間隔、5個ごとのグループ間はやや広い(〜20px)。
+      // インベントリのアイコングリッド(44px間隔)はここで弾かれる
+      let regular = 0;
+      for (let i = 1; i < gs.length; i++) {
+        const step = (gs[i].x0 + gs[i].x1) / 2 - (gs[i - 1].x0 + gs[i - 1].x1) / 2;
+        if (step >= 9 && step <= 20) regular++;
+      }
+      if (regular >= gs.length - 3) ln.isStars = true;
+    }
+  }
+
+  // 構造ルール: 星列はツールチップ最上部にあるので、最後の星列より上の非星行は
+  // (検出上端の行き過ぎで入った)ツールチップ外のジャンク
+  const lastStar = lines.reduce((acc, l, i) => (l.isStars ? i : acc), -1);
+  const structural = lastStar > 0 ? lines.filter((l, i) => i >= lastStar || l.isStars) : lines;
+
   // 微小な単発グリフだけの行はノイズ
-  return lines.filter((ln) => {
+  return structural.filter((ln) => {
     if (!ln.glyphs.length) return false;
     if (ln.glyphs.length === 1) {
       const g = ln.glyphs[0];

@@ -64,19 +64,20 @@ export class GlyphBank {
     let inkD = 0;
     for (const b of d.bits) inkD += b;
     if (inkD < 3) return null; // 極小グリフは誤吸着しやすいので対象外
-    let best = null, bestMis = Infinity;
-    for (let dw = -1; dw <= 1; dw++) {
-      for (let dh = -1; dh <= 1; dh++) {
+    let best = null, bestMis = Infinity, second = Infinity, secondLabel = null;
+    for (let dw = -2; dw <= 2; dw++) {
+      for (let dh = -2; dh <= 2; dh++) {
         const cands = this.bySize.get(`${d.w + dw}x${d.h + dh}:${d.flag}`);
         if (!cands) continue;
         for (const c of cands) {
           if (c.label === '') continue;
           const cw = d.w + dw, chh = d.h + dh;
-          for (let ox = -1; ox <= 1; ox++) {
-            for (let oy = -1; oy <= 1; oy++) {
+          let candBest = Infinity;
+          for (let ox = -2; ox <= 2; ox++) {
+            for (let oy = -2; oy <= 2; oy++) {
               let mis = 0;
               const W = Math.max(d.w, cw + ox), H = Math.max(d.h, chh + oy);
-              for (let y = 0; y < H && mis < bestMis; y++) {
+              for (let y = 0; y < H && mis < candBest; y++) {
                 for (let x = 0; x < W; x++) {
                   const a = (x < d.w && y < d.h) ? d.bits[y * d.w + x] : 0;
                   const cx = x - ox, cy = y - oy;
@@ -84,8 +85,16 @@ export class GlyphBank {
                   if (a !== b) mis++;
                 }
               }
-              if (mis < bestMis) { bestMis = mis; best = c; }
+              if (mis < candBest) candBest = mis;
             }
+          }
+          if (candBest < bestMis) {
+            if (best && best.label !== c.label) { second = bestMis; secondLabel = best.label; }
+            bestMis = candBest;
+            best = c;
+          } else if (best && c.label !== best.label && candBest < second) {
+            second = candBest;
+            secondLabel = c.label;
           }
         }
       }
@@ -93,9 +102,12 @@ export class GlyphBank {
     if (!best) return null;
     let inkB = 0;
     for (const b of best.bits) inkB += b;
-    const allowed = Math.max(3, Math.ceil(0.18 * Math.max(inkD, inkB)));
+    const allowed = Math.max(3, Math.ceil(0.22 * Math.max(inkD, inkB)));
     if (inkD <= 8 && bestMis > 2) return null; // 小型グリフは厳しめ
-    return bestMis <= allowed ? { label: best.label, dist: bestMis } : null;
+    if (bestMis > allowed) return null;
+    // 弱い一致(不一致3以上)のときだけ、別ラベルの次点と僅差なら曖昧として棄却
+    if (bestMis >= 3 && secondLabel !== null && second - bestMis < 2) return null;
+    return { label: best.label, dist: bestMis };
   }
   toJSON() {
     return { version: 1, glyphs: this.glyphs };
@@ -138,9 +150,10 @@ export function recognizeLine(line, bank) {
   return { text: chars.map((c) => c.ch).join(''), chars, unknowns };
 }
 
-// ツールチップ全行を認識
+// ツールチップ全行を認識(星列はOCRせずそのまま通す)
 export function recognizeLines(lines, bank) {
   return lines.map((ln) => {
+    if (ln.isStars) return { ...ln, text: '', chars: [], unknowns: [] };
     const r = recognizeLine(ln, bank);
     return { ...ln, text: r.text, chars: r.chars, unknowns: r.unknowns };
   });

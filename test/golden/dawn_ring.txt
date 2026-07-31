@@ -1,8 +1,7 @@
 # golden: dawn_ring
 Dawn Guardian Angel Ring
-§Untradable
-!icon-area junk
-!right-side partial
+Untradable
+Currently Equipped
 Accessory
 Ring
 Required Job Shared

@@ -1,7 +1,7 @@
 Black Heart§
 Special Item
 Untradable
-Duration: 8/6/202613:53 UTC (Can't Extend)
+!Duration line (merge位置が揺れるためスキップ。構成文字は他行で学習済み)
 Currently Equipped
 Mech Heart
 Required Job Shared

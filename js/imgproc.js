@@ -14,19 +14,37 @@ export const C = {
 
 export const COLOR_NAMES = ['none', 'white', 'yellow', 'cyan', 'orange', 'green', 'purple'];
 
-// サンプル実測値(RGB): 白(240,240,240) グレー白(176,176,192) 黄(240,192,0)
-// 水色(0,224,160) オレンジ(240,128,16) ポテ緑(192,240,0) 背景(48,48,64)
+// 2系統の入力を受ける: スクショの鮮明色と、画面共有(YUV 4:2:0)で褪せた色。
+//   実測: 黄 (240,192,0)→(208,192,128) / 緑 (192,240,0)→(192,224,128)
+//        水色 (0,224,160)→(96,176,160) / 白 (240,240,240)は不変
+// 絶対値でなくチャンネル間の相対関係で判定する。
 export function classifyPixel(r, g, b) {
   const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
   if (mx < 150) return C.NONE;
   if (mn > 140 && mx - mn < 60) return C.WHITE;
-  if (r > 180 && g > 140 && b < 110 && r >= g + 20) return C.YELLOW;
-  if (g > 200 && b < 110 && g >= r + 20) return C.GREEN;
-  if (g > 160 && b > 100 && g >= r + 60) return C.CYAN;
-  if (r > 200 && g >= 90 && g < 175 && b < 95) return C.ORANGE;
-  // Epic紫テキスト/ブレット実測(176,112,240)。b>200が背景紫ノイズ(~160)との分離線
-  if (b > 200 && r > 140 && g < 150 && b - g > 80) return C.PURPLE;
+  // オレンジ: 赤が緑を大きく上回る(黄はr-g≤48なのでr-g≥60で分離)
+  if (r >= 200 && g >= 90 && g < 180 && b < 110 && r - g >= 60) return C.ORANGE;
+  // 黄: 赤≥緑>青。褪せると青が128まで浮く
+  if (r > 190 && g > 150 && r >= g + 10 && b <= g - 40 && r - b >= 60) return C.YELLOW;
+  // 緑: 緑>赤、青は緑より十分低い(水色はg-bが小さいので分離)
+  if (g > 200 && g >= r + 20 && b <= g - 80) return C.GREEN;
+  // 水色: 緑>赤+50、青が高く緑に近い
+  if (g > 150 && g >= r + 50 && b >= 110 && g - b < 70) return C.CYAN;
+  // Epic紫(176,112,240)。褪せで青が~200まで落ちても拾う。背景紫ノイズ(b~160)は除外
+  if (b >= 185 && b >= r + 15 && g < r) return C.PURPLE;
   return C.NONE;
+}
+
+// グリフ平均色の分類(セグメント後の色意味づけ用)。
+// 画面共有でクロマが潰れても、グリフ全画素の平均なら色相は保たれる
+export function classifyMeanColor(r, g, b) {
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+  if (mx - mn < 45 || mn > 150) return C.WHITE;
+  if (b > r && b > g + 35) return C.PURPLE;
+  if (g > r + 20) return (g - b >= 70) ? C.GREEN : C.CYAN;
+  // 黄/橙境界: ブレットや星は縁の暗色で平均が橙寄りに沈むため橙は強い赤優位のみ
+  if (r - g >= 80) return C.ORANGE;
+  return C.YELLOW;
 }
 
 // 画像全体(または bbox 内)のクラスマップを返す

@@ -41,7 +41,9 @@ function loadSample(name) {
     bbox = { x: 0, y: 0, w: img.width, h: img.height };
   }
   const tip = crop(img, bbox);
-  return { img, bbox, tip, stars: countStars(img, bbox), lines: segmentLines(tip) };
+  const linesAll = segmentLines(tip);
+  // label/ocr のgolden整列は星列を除いたテキスト行に対して行う
+  return { img, bbox, tip, stars: countStars(img, bbox), lines: linesAll.filter((l) => !l.isStars), linesAll };
 }
 
 function drawOverlay(name, tip, lines) {
@@ -255,8 +257,9 @@ if (cmd === 'ocr' || cmd === 'parse') {
   const bank = new GlyphBank(JSON.parse(readFileSync(`${ROOT}data/glyphbank.json`, 'utf-8')));
   let pass = 0, fail = 0;
   for (const name of SAMPLES) {
-    const { lines, stars } = loadSample(name);
-    const rec = recognizeLines(lines, bank);
+    const { lines, linesAll, stars } = loadSample(name);
+    // ocr(golden行比較)は星列抜き、parse(星数含む)は全行で本番と同じ経路
+    const rec = recognizeLines(cmd === 'parse' ? linesAll : lines, bank);
     if (cmd === 'ocr') {
       const golden = goldenLines(name);
       console.log(`\n== ${name}`);

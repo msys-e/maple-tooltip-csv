@@ -19,3 +19,4 @@ Enemy DEF Ignored +5%
 §Potential : Legendary
 STR: +13%
 STR: +13%
+!bottom-cut pot3

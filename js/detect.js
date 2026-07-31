@@ -97,6 +97,10 @@ function boxFromAnchor(img, a) {
     }
     return c >= 5;
   };
+  // 名前ブロックは d1 直上の高々 ~35px (Untradable+名前)。それ以上は登らない
+  // (ツールチップ上に重なるインベントリ等の明るいUIへの這い上がり対策)
+  // 特殊アイテムはヘッダが4行(名前/Special Item/Untradable/Duration)あるため70pxまで登る。
+  // 行き過ぎてもテキスト行の選別(星列除外・名前特定)が下流で吸収する
   let NT = -1, gap = 0;
   for (let y = d1 - 3; y >= Math.max(0, d1 - 70); y--) {
     if (nameRow(y)) { NT = y; gap = 0; }
@@ -104,15 +108,31 @@ function boxFromAnchor(img, a) {
   }
   let contentTop = NT >= 0 ? NT : d1 - 2;
   if (NT >= 0) {
-    // 星は名前ブロック直上の狭い窓だけで探す(インベントリの金色アイコン対策)
-    for (let y = NT - 4; y >= Math.max(0, NT - 46); y--) {
-      let rowStar = 0;
-      let p = (y * w + x0) * 4;
-      for (let i = 0; i < n; i++, p += 4) {
-        const r = d[p], g = d[p + 1], b = d[p + 2];
-        if (r > 200 && g > 150 && g < 220 && b < 70 && r > g) rowStar++;
+    // 星判定: 名前直上の窓で「y整列した星形ブロブ≥3個」のクラスタを探す
+    // (行単位の黄色画素数では背景の金色UIを誤認するため、ブロブ形状+整列で判定)
+    const sy0 = Math.max(0, NT - 52), sy1 = NT - 4;
+    if (sy1 > sy0) {
+      const bh = sy1 - sy0 + 1;
+      const mask = new Uint8Array(n * bh);
+      for (let y = 0; y < bh; y++) {
+        let p = ((sy0 + y) * w + x0) * 4;
+        for (let i = 0; i < n; i++, p += 4) {
+          const r = d[p], g = d[p + 1], b = d[p + 2];
+          if (r > 190 && g > 150 && r >= g + 10 && b <= g - 40) mask[y * n + i] = 1;
+        }
       }
-      if (rowStar >= 4) contentTop = y;
+      const blobs = connectedComponents(mask, n, bh, false)
+        .filter((c) => {
+          const cw = c.x1 - c.x0 + 1, chh = c.y1 - c.y0 + 1;
+          return c.area >= 10 && cw >= 5 && cw <= 18 && chh >= 5 && chh <= 18;
+        });
+      blobs.sort((p, q) => p.y0 - q.y0);
+      for (let i = 0; i < blobs.length; ) {
+        let j = i;
+        while (j < blobs.length && blobs[j].y0 - blobs[i].y0 <= 3) j++;
+        if (j - i >= 3) { contentTop = sy0 + blobs[i].y0; break; } // 最上段の星列
+        i = j;
+      }
     }
   }
   const above = upCands.filter((y) => y <= contentTop - 2 && y >= contentTop - 16);
@@ -222,22 +242,17 @@ function findTooltipBlob(img) {
 }
 
 export function findTooltip(img) {
-  // 小さい画像(ツールチップ単体スクショ)はブロブ方式優先。
-  // 隣接パネル混入等でブロブが失敗したらアンカー方式(Required Job)で救済。
-  // フルスクリーン級のフレームは常にアンカー方式。
-  if (img.width < 600) {
-    const b = findTooltipBlob(img);
-    if (!b.error) return b;
-    const a = findAnchor(img);
-    if (a) {
-      const r = boxFromAnchor(img, a);
-      if (!r.error) return r;
-    }
-    return b;
-  }
+  // 常にアンカー方式(Required Jobは全装備ツールチップに必ずある)。
+  // ライブフレームもスクショ貼り付けも同一経路になり、行構成が安定する。
+  // アンカーが見つからない小画像のみブロブ方式にフォールバック
   const a = findAnchor(img);
-  if (!a) return { error: 'not_found' };
-  return boxFromAnchor(img, a);
+  if (a) {
+    const r = boxFromAnchor(img, a);
+    if (!r.error) return r;
+    if (img.width >= 600) return r;
+  }
+  if (img.width < 600) return findTooltipBlob(img);
+  return { error: 'not_found' };
 }
 
 // スターフォース星カウント: bbox 上部帯の黄色星ブロブを数える

@@ -185,7 +185,11 @@ function processTooltip(img, bbox, { silent = false } = {}) {
   const { canvas, sub } = cropToCanvas(img, bbox);
   const lines = segmentLines(sub);
   const rec = recognizeLines(lines, bank);
-  const unknowns = rec.flatMap((ln) => ln.unknowns.map((g) => ({ g, ln })));
+  // 名前行より上(検出上端の行き過ぎで入ったツールチップ外領域)の未知はラベラーに積まない
+  const preItem = parseTooltip(rec, stars);
+  const nameY = preItem._name_y ?? -1;
+  const unknowns = rec.flatMap((ln) =>
+    (nameY >= 0 && ln.y1 < nameY - 2) ? [] : ln.unknowns.map((g) => ({ g, ln })));
   if (unknowns.length) {
     lastUnknownFrame = img; // 診断用: 未知が出たフレームを保持
     console.log('[mtc] unknowns', unknowns.map(({ g }) => g.key));
@@ -200,7 +204,8 @@ function processTooltip(img, bbox, { silent = false } = {}) {
     }
     return 'unknowns';
   }
-  const item = parseTooltip(rec, stars);
+  const item = preItem;
+  delete item._name_y;
   const key = itemKey(item);
   if (itemKeys.has(key)) {
     if (!silent) toast(`重複スキップ: ${item.item_name}`, 'warn');
