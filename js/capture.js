@@ -53,10 +53,12 @@ export class CaptureController {
     }
     this.ctx.drawImage(v, 0, 0);
     const img = this.ctx.getImageData(0, 0, this.canvas.width, this.canvas.height);
+    this.lastFrame = img; // 診断保存用
     const found = findTooltip(img);
     const info = { res: `${img.width}x${img.height}` };
     if (found.error) {
-      info.tip = { not_found: '検出待ち', clipped: '画面端で欠けています', bad_width: 'サイズ不正(UIスケール?)' }[found.error];
+      const size = found.bbox ? ` [検出${found.bbox.w}x${found.bbox.h}]` : '';
+      info.tip = ({ not_found: '検出待ち', clipped: '画面端で欠けています', bad_width: '幅が想定外(295-365px)' }[found.error]) + size;
       this.lastHash = null;
       this.stableN = 0;
       this.cb.onInfo(info);

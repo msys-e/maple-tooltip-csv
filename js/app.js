@@ -279,6 +279,19 @@ $('btn-capture').addEventListener('click', async () => {
 
 installDropPaste((img) => processImage(img));
 
+$('btn-frame-save').addEventListener('click', () => {
+  const img = capture.lastFrame;
+  if (!img) { toast('共有中のフレームがありません', 'warn'); return; }
+  const c = document.createElement('canvas');
+  c.width = img.width;
+  c.height = img.height;
+  c.getContext('2d').putImageData(img, 0, 0);
+  const a = document.createElement('a');
+  a.href = c.toDataURL('image/png');
+  a.download = `frame_${Date.now()}.png`;
+  a.click();
+});
+
 // ---------- CSV / スナップショット / エクスポート ----------
 $('btn-csv').addEventListener('click', () => {
   if (!items.length) { toast('アイテムがありません', 'warn'); return; }
