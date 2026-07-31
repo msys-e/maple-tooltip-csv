@@ -61,7 +61,8 @@ for (const path of process.argv.slice(2)) {
   const nameY = item._name_y ?? -1;
   let unk = 0, junkUnk = 0;
   for (const ln of rec) {
-    if (nameY >= 0 && ln.y1 < nameY - 2) { junkUnk += ln.unknowns.length; continue; }
+    const realChars = (ln.text || '').replace(/[�\s]/g, '').length;
+    if ((nameY >= 0 && ln.y1 < nameY - 2) || realChars < 3) { junkUnk += ln.unknowns.length; continue; }
     unk += ln.unknowns.length;
     for (const g of ln.unknowns) {
       console.log(` unk ${g.key.padEnd(30)} ${g.color.padEnd(6)} x=${g.x0}-${g.x1} y=${g.y0} line="${ln.text.slice(0, 44)}" ${nearest(g.key)}`);

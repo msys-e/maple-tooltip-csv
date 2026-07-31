@@ -185,11 +185,16 @@ function processTooltip(img, bbox, { silent = false } = {}) {
   const { canvas, sub } = cropToCanvas(img, bbox);
   const lines = segmentLines(sub);
   const rec = recognizeLines(lines, bank);
-  // 名前行より上(検出上端の行き過ぎで入ったツールチップ外領域)の未知はラベラーに積まない
+  // ツールチップ外領域の未知はラベラーに積まない:
+  //  - 名前行より上(上端の行き過ぎ) / 認識3文字未満のジャンク行(下端の行き過ぎ)
   const preItem = parseTooltip(rec, stars);
   const nameY = preItem._name_y ?? -1;
-  const unknowns = rec.flatMap((ln) =>
-    (nameY >= 0 && ln.y1 < nameY - 2) ? [] : ln.unknowns.map((g) => ({ g, ln })));
+  const realChars = (ln) => (ln.text || '').replace(/[�\s]/g, '').length;
+  const unknowns = rec.flatMap((ln) => {
+    if (nameY >= 0 && ln.y1 < nameY - 2) return [];
+    if (realChars(ln) < 3) return [];
+    return ln.unknowns.map((g) => ({ g, ln }));
+  });
   if (unknowns.length) {
     lastUnknownFrame = img; // 診断用: 未知が出たフレームを保持
     console.log('[mtc] unknowns', unknowns.map(({ g }) => g.key));

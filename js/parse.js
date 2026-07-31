@@ -116,6 +116,8 @@ export function parseTooltip(lines, starCount) {
   for (const ln of textLines) {
     if (consumed.has(ln)) continue;
     const text = ln.text.trim();
+    // 認識できた文字が3文字未満の行は検出範囲外のジャンク(raw_textには残る)
+    if (text.replace(/[�\s]/g, '').length < 3) continue;
 
     // 例: "Potential : Legendary" / "Potential : Epic (Fully Enhanced)" → 等級のみ取る
     // 先頭の"L "はポテンシャルアイコンを'L'と誤ラベルした場合の救済
