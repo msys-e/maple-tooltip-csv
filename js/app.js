@@ -31,17 +31,25 @@ function toast(msg, cls = '') {
 }
 
 let audioCtx = null;
-function beep(freq = 880, dur = 0.07) {
+// 取得音: 矩形波ビープは不評だったため、サイン波の減衰付きソフトチャイムに
+function chime(kind = 'success') {
   try {
     audioCtx = audioCtx || new AudioContext();
-    const o = audioCtx.createOscillator();
-    const g = audioCtx.createGain();
-    o.type = 'square';
-    o.frequency.value = freq;
-    g.gain.value = 0.04;
-    o.connect(g).connect(audioCtx.destination);
-    o.start();
-    o.stop(audioCtx.currentTime + dur);
+    const t0 = audioCtx.currentTime;
+    // success: C5→G5の柔らかい2音 / warn: G4の1音(控えめ)
+    const notes = kind === 'success' ? [[523.25, 0], [783.99, 0.09]] : [[392, 0]];
+    for (const [freq, dt] of notes) {
+      const o = audioCtx.createOscillator();
+      const g = audioCtx.createGain();
+      o.type = 'sine';
+      o.frequency.value = freq;
+      g.gain.setValueAtTime(0.0001, t0 + dt);
+      g.gain.exponentialRampToValueAtTime(0.05, t0 + dt + 0.015);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + dt + 0.35);
+      o.connect(g).connect(audioCtx.destination);
+      o.start(t0 + dt);
+      o.stop(t0 + dt + 0.4);
+    }
   } catch { /* 音は出なくてもよい */ }
 }
 
@@ -206,7 +214,7 @@ function processTooltip(img, bbox, { silent = false } = {}) {
     $('unknown-count').textContent = labeler.count;
     $('unknown-banner').classList.add('show');
     if (!silent) {
-      beep(440);
+      chime('warn');
       toast(`未知の文字 ${labeler.count} 件 — ラベル付けしてください`, 'warn');
       labeler.open();
     }
@@ -244,7 +252,7 @@ function processTooltip(img, bbox, { silent = false } = {}) {
   render();
   const tr = $('table-wrap').querySelector(`tr[data-idx="${items.length - 1}"]`);
   if (tr) tr.classList.add('new-row');
-  beep(880);
+  chime('success');
   toast(`追加: ${item.item_name} ★${item.star_count}`);
   return 'added';
 }
