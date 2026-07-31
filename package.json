@@ -1,0 +1,9 @@
+{
+  "name": "maple-tooltip-csv",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node test/run.mjs ocr && node test/run.mjs parse",
+    "serve": "python -m http.server 8471"
+  }
+}

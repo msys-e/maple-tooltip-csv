@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>debug — Maple Tooltip Scanner</title>
+<link href="https://fonts.googleapis.com/css2?family=DotGothic16&family=IBM+Plex+Mono&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<style>
+  #debug-wrap { display: flex; gap: 16px; flex-wrap: wrap; align-items: flex-start; }
+  #overlay { image-rendering: pixelated; border: 1px solid var(--panel-edge); }
+  pre { font-family: var(--mono); font-size: 12px; color: var(--ink); white-space: pre-wrap; max-width: 560px; }
+  .lines span.b { color: var(--star); }
+</style>
+</head>
+<body>
+<header><h1>DEBUG <span class="sub">セグメント/OCR/パース確認</span></h1></header>
+<div class="toolbar">
+  <button data-sample="berserked">berserked</button>
+  <button data-sample="dawn_ring">dawn_ring</button>
+  <button data-sample="genesis_sword">genesis_sword</button>
+  <span class="spacer"></span>
+  <span style="color:var(--ink-dim)">または画像をドロップ/ペースト</span>
+  <a class="btn" href="index.html" style="text-decoration:none">← 本体へ</a>
+</div>
+<div id="debug-wrap">
+  <canvas id="overlay"></canvas>
+  <div>
+    <h2 style="font-family:'DotGothic16'">認識行</h2>
+    <pre id="lines" class="lines"></pre>
+    <h2 style="font-family:'DotGothic16'">パース結果</h2>
+    <pre id="parsed"></pre>
+  </div>
+</div>
+<div id="toasts"></div>
+<script type="module">
+import { segmentLines } from './js/segment.js';
+import { GlyphBank, recognizeLines } from './js/ocr.js';
+import { parseTooltip } from './js/parse.js';
+import { findTooltip, countStars } from './js/detect.js';
+import { imageFromBlob, installDropPaste } from './js/capture.js';
+
+let bank = new GlyphBank(null);
+try { bank = new GlyphBank(await (await fetch('data/glyphbank.json')).json()); } catch {}
+const user = JSON.parse(localStorage.getItem('mtc:userbank') || '{}');
+for (const [k, v] of Object.entries(user)) bank.add(k, v);
+
+function run(img) {
+  let bbox = findTooltip(img);
+  if (bbox.error) bbox = { x: 0, y: 0, w: img.width, h: img.height };
+  const sub = new ImageData(new Uint8ClampedArray(bbox.w * bbox.h * 4), bbox.w, bbox.h);
+  for (let y = 0; y < bbox.h; y++) {
+    const s = ((bbox.y + y) * img.width + bbox.x) * 4;
+    sub.data.set(img.data.subarray(s, s + bbox.w * 4), y * bbox.w * 4);
+  }
+  const lines = segmentLines(sub);
+  const rec = recognizeLines(lines, bank);
+  const stars = countStars(img, bbox);
+  const cv = document.getElementById('overlay');
+  cv.width = bbox.w; cv.height = bbox.h;
+  const ctx = cv.getContext('2d');
+  ctx.putImageData(sub, 0, 0);
+  for (const ln of rec) {
+    ctx.strokeStyle = 'rgba(255,60,60,.8)';
+    ctx.strokeRect(ln.x0 - 2.5, ln.y0 - 2.5, ln.x1 - ln.x0 + 5, ln.y1 - ln.y0 + 5);
+    ctx.strokeStyle = 'rgba(0,255,120,.5)';
+    for (const g of ln.glyphs) ctx.strokeRect(g.x0 - .5, g.y0 - .5, g.x1 - g.x0 + 1, g.y1 - g.y0 + 1);
+  }
+  document.getElementById('lines').innerHTML =
+    `stars=<span class="b">${stars}</span>\n` +
+    rec.map((l) => (l.bullet ? `<span class="b">[${l.bullet}]</span> ` : '') +
+      l.text.replace(/&/g, '&amp;').replace(/</g, '&lt;') +
+      (l.unknowns.length ? ` <span style="color:#ff5060">(?×${l.unknowns.length})</span>` : '')).join('\n');
+  document.getElementById('parsed').textContent = JSON.stringify(parseTooltip(rec, stars), null, 1);
+}
+
+for (const b of document.querySelectorAll('[data-sample]')) {
+  b.onclick = async () => run(await imageFromBlob(await (await fetch(`samples/${b.dataset.sample}.png`)).blob()));
+}
+installDropPaste(run);
+</script>
+</body>
+</html>

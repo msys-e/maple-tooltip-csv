@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Maple Tooltip Scanner</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='13'>⭐</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DotGothic16&family=IBM+Plex+Mono:wght@400;600&family=M+PLUS+1p:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<header>
+  <h1>MAPLE TOOLTIP SCANNER <span class="sub">装備ツールチップ → CSV</span></h1>
+  <span id="status" class="status">待機中</span>
+</header>
+
+<div class="toolbar">
+  <button id="btn-capture" class="primary">画面共有を開始</button>
+  <button id="btn-csv">CSVダウンロード</button>
+  <button id="btn-snapshot">スナップショット保存</button>
+  <select id="snapshot-list"><option value="">スナップショット…</option></select>
+  <button id="btn-restore">復元</button>
+  <button id="btn-snap-del" class="danger">削除</button>
+  <span class="spacer"></span>
+  <button id="btn-export">JSONエクスポート</button>
+  <button id="btn-import">インポート</button>
+  <input type="file" id="import-file" accept=".json" hidden>
+  <button id="btn-clear" class="danger">表をクリア</button>
+</div>
+
+<div id="unknown-banner">⚠ 未知の文字が <span id="unknown-count">0</span> 件あります — クリックしてラベル付け</div>
+
+<div class="panel" id="capture-panel" style="display:none">
+  <div id="preview-wrap">
+    <video id="preview" autoplay muted playsinline></video>
+    <div id="capture-info">
+      解像度: <b id="info-res">-</b><br>
+      ツールチップ: <b id="info-tip">検出待ち</b><br>
+      取得済み: <b id="info-count">0</b> 件<br>
+      <span style="color:var(--ink-dim)">ゲーム内で装備にマウスを乗せると自動で記録されます</span>
+    </div>
+  </div>
+</div>
+
+<div class="panel">
+  <div id="table-wrap"></div>
+  <div id="empty-hint">
+    まだアイテムがありません。<br>
+    <kbd>画面共有を開始</kbd> してゲーム内で装備をオンマウス、<br>
+    またはスクリーンショットを <kbd>Ctrl+V</kbd> / ドラッグ&amp;ドロップ
+  </div>
+</div>
+
+<div class="modal-back" id="labeler-back">
+  <div class="modal">
+    <h2>未知の文字にラベルを付ける (<span id="labeler-progress"></span>)</h2>
+    <canvas id="glyph-zoom"></canvas>
+    <canvas id="glyph-context"></canvas>
+    <div class="row">
+      <label>この文字は→</label>
+      <input type="text" id="labeler-input" maxlength="3" autocomplete="off">
+      <button id="labeler-ok" class="primary">決定 (Enter)</button>
+      <button id="labeler-ignore">アイコン扱いで無視</button>
+      <button id="labeler-skip">スキップ</button>
+      <button id="labeler-close" class="danger">閉じる</button>
+    </div>
+    <div class="hint">
+      くっついた2文字はそのまま2文字入力（例: <code>ti</code>）。装飾アイコンは「無視」。<br>
+      ラベルはブラウザに保存され、次回から自動認識されます。
+    </div>
+  </div>
+</div>
+
+<div class="modal-back" id="zoom-back">
+  <div class="modal"><img id="zoom-img" alt="tooltip"></div>
+</div>
+
+<div id="toasts"></div>
+
+<footer>
+  glyph bank: <span id="bank-info">-</span> ｜ データはすべてこのブラウザの localStorage に保存されます ｜
+  <a href="test.html">debug</a>
+</footer>
+
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
