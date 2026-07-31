@@ -9,6 +9,7 @@ const STAT_LABELS = [
   ['Max HP', 'max_hp'],
   ['Max MP', 'max_mp'],
   ['Boss Damage', 'boss_damage'],
+  ['Damage', 'damage'],
   ['Enemy DEF Ignored', 'ignore_def'],
   ['Ignore Enemy DEF', 'ignore_def'],
   ['Defense', 'defense'],

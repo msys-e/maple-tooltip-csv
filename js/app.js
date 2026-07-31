@@ -60,22 +60,32 @@ async function copyText(text, cell) {
 }
 
 // ---------- テーブル ----------
-const STAT_DEFS = [
-  ['str', 'STR'], ['dex', 'DEX'], ['int', 'INT'], ['luk', 'LUK'],
-  ['max_hp', 'HP'], ['max_mp', 'MP'],
-  ['attack_power', '攻撃力'], ['magic_att', '魔力'], ['defense', '防御'],
-  ['all_stats_pct', 'ALL%'], ['boss_damage_pct', 'ボスダメ%'], ['ignore_def_pct', '防御無視%'],
+// 表の列定義(ユーザー指定の固定レイアウト)。転生=水色内訳(_bonus)
+const TABLE_COLS = [
+  ['str_total', 'STR', ''],
+  ['str_bonus', 'STR転生', 'c-bonus'],
+  ['dex_total', 'DEX', ''],
+  ['dex_bonus', 'DEX転生', 'c-bonus'],
+  ['luk_total', 'LUK', ''],
+  ['luk_bonus', 'LUK転生', 'c-bonus'],
+  ['all_stats_pct_total', 'ALLstats', ''],
+  ['attack_power_total', '攻撃力', ''],
+  ['attack_power_bonus', '攻撃力転生', 'c-bonus'],
+  ['magic_att_total', '魔力', ''],
+  ['magic_att_bonus', '魔力転生', 'c-bonus'],
+  ['boss_damage_pct_bonus', 'Boss転生', 'c-bonus'],
+  ['damage_pct_bonus', 'Dmage転生', 'c-bonus'],
 ];
 
-function statCell(it, base) {
-  const t = it[`${base}_total`];
-  if (t === undefined) return '';
+// 合計セルのtitleに内訳(素+スタフォ+転生)を出す
+function breakdownTitle(it, col) {
+  if (!col.endsWith('_total')) return '';
+  const base = col.slice(0, -6);
   const parts = [];
-  if (it[`${base}_base`] !== undefined) parts.push(`<span class="bd" data-v="${it[`${base}_base`]}">${it[`${base}_base`]}</span>`);
-  if (it[`${base}_star`] !== undefined) parts.push(`<span class="bd c-star" data-v="${it[`${base}_star`]}">+${it[`${base}_star`]}</span>`);
-  if (it[`${base}_bonus`] !== undefined) parts.push(`<span class="bd c-bonus" data-v="${it[`${base}_bonus`]}">+${it[`${base}_bonus`]}</span>`);
-  const bd = parts.length ? ` <small style="opacity:.75">(${parts.join(' ')})</small>` : '';
-  return `<b data-v="${t}">${t}</b>${bd}`;
+  if (it[`${base}_base`] !== undefined) parts.push(`素${it[`${base}_base`]}`);
+  if (it[`${base}_star`] !== undefined) parts.push(`スタフォ+${it[`${base}_star`]}`);
+  if (it[`${base}_bonus`] !== undefined) parts.push(`転生+${it[`${base}_bonus`]}`);
+  return parts.join(' ');
 }
 
 function render() {
@@ -83,27 +93,24 @@ function render() {
   $('empty-hint').style.display = items.length ? 'none' : 'block';
   if (!items.length) { wrap.innerHTML = ''; updateMeta(); return; }
 
-  const activeStats = STAT_DEFS.filter(([b]) => items.some((it) => it[`${b}_total`] !== undefined));
-  const hasPot = items.some((it) => it.pot1_text);
   let html = '<table><thead><tr><th></th><th>アイテム</th><th class="grp-star">★</th>';
-  for (const [, label] of activeStats) html += `<th>${label}</th>`;
-  if (hasPot) html += '<th>潜在</th><th>潜在1</th><th>潜在2</th><th>潜在3</th>';
-  html += '<th>取得日時</th><th></th></tr></thead><tbody>';
+  for (const [, label, cls] of TABLE_COLS) html += `<th class="${cls ? 'grp-bonus' : ''}">${label}</th>`;
+  html += '<th>潜在1</th><th>潜在2</th><th>潜在3</th><th></th></tr></thead><tbody>';
   items.forEach((it, idx) => {
     html += `<tr data-idx="${idx}">`;
     html += `<td class="thumb">${it.thumb ? `<img src="${it.thumb}" alt="">` : ''}</td>`;
-    html += `<td class="name" data-v="${esc(it.item_name)}">${esc(it.item_name)}</td>`;
+    html += `<td class="name" data-v="${esc(it.item_name)}" title="取得: ${esc((it.timestamp || '').replace('T', ' ').slice(0, 16))}">${esc(it.item_name)}</td>`;
     html += `<td class="stars" data-v="${it.star_count}">★${it.star_count}</td>`;
-    for (const [b] of activeStats) html += `<td>${statCell(it, b)}</td>`;
-    if (hasPot) {
-      html += `<td class="grade-${it.potential_grade}" data-v="${esc(it.potential_grade || '')}">${esc(it.potential_grade || '')}</td>`;
-      for (const n of [1, 2, 3]) {
-        const t = it[`pot${n}_text`] || '';
-        html += `<td class="grade-${it[`pot${n}_grade`] || ''}" data-v="${esc(t)}" title="${esc(it[`pot${n}_grade`] || '')}">${esc(t)}</td>`;
-      }
+    for (const [col, , cls] of TABLE_COLS) {
+      const v = it[col];
+      html += v === undefined
+        ? '<td></td>'
+        : `<td class="${cls}" data-v="${v}" title="${esc(breakdownTitle(it, col))}">${v}</td>`;
     }
-    const ts = (it.timestamp || '').replace('T', ' ').slice(5, 16);
-    html += `<td data-v="${esc(it.timestamp || '')}">${esc(ts)}</td>`;
+    for (const n of [1, 2, 3]) {
+      const t = it[`pot${n}_text`] || '';
+      html += `<td class="grade-${it[`pot${n}_grade`] || ''}" data-v="${esc(t)}" title="${esc(it[`pot${n}_grade`] || '')}">${esc(t)}</td>`;
+    }
     html += '<td class="del" title="この行を削除">×</td></tr>';
   });
   html += '</tbody></table>';
