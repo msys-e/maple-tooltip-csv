@@ -83,7 +83,8 @@ export function parseTooltip(lines, starCount) {
     const text = ln.text.trim();
 
     // 例: "Potential : Legendary" / "Potential : Epic (Fully Enhanced)" → 等級のみ取る
-    const potHead = /^Potential\s*:?\s*([^(]*?)\s*(?:\(.*)?$/.exec(text);
+    // 先頭の"L "はポテンシャルアイコンを'L'と誤ラベルした場合の救済
+    const potHead = /^(?:L\s+)?Potential\s*:?\s*([^(]*?)\s*(?:\(.*)?$/.exec(text);
     if (potHead) {
       if (potHead[1].trim()) item.potential_grade = potHead[1].trim(); // 等級欠落行でも空文字で上書きしない
       section = 'potential';

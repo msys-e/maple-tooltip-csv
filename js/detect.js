@@ -153,11 +153,19 @@ function boxFromAnchor(img, a) {
     }
     if (!hasInterior) { bottom = y; break; }
   }
-  if (bottom < 0) bottom = lastCand > 0 ? lastCand : Math.min(h - 1, a.y + 400);
+  let bottomCut = false;
+  if (bottom < 0) {
+    // 有効な下縁なし: 走査が画像下端まで届いていたら「下が切れた画像」とみなし下端まで採用
+    if (a.y + 760 >= h - 3) { bottom = h - 3; bottomCut = true; }
+    else bottom = lastCand > 0 ? lastCand : Math.min(h - 1, a.y + 400);
+  }
 
   // 幅: 下縁の縁色ラン(直上より明るい)を右へ伸ばして右端を得る。左端はアンカー由来のbx
+  // 下端が切れた画像では下縁ランが使えないため既定幅(325+余白)にフォールバック
   let right = x1;
-  {
+  if (bottomCut) {
+    right = Math.min(w - 1, bx + 323);
+  } else {
     let x = x1;
     while (x < Math.min(w - 1, bx + TOOLTIP_MAX_W + 10)) {
       const nl = lumAt(d, ((bottom * w) + x + 1) * 4);
@@ -214,8 +222,19 @@ function findTooltipBlob(img) {
 }
 
 export function findTooltip(img) {
-  // フルスクリーン級のフレームはアンカー方式、小さい画像(ツールチップ単体crop)はブロブ方式
-  if (img.width < 600) return findTooltipBlob(img);
+  // 小さい画像(ツールチップ単体スクショ)はブロブ方式優先。
+  // 隣接パネル混入等でブロブが失敗したらアンカー方式(Required Job)で救済。
+  // フルスクリーン級のフレームは常にアンカー方式。
+  if (img.width < 600) {
+    const b = findTooltipBlob(img);
+    if (!b.error) return b;
+    const a = findAnchor(img);
+    if (a) {
+      const r = boxFromAnchor(img, a);
+      if (!r.error) return r;
+    }
+    return b;
+  }
   const a = findAnchor(img);
   if (!a) return { error: 'not_found' };
   return boxFromAnchor(img, a);

@@ -1,0 +1,23 @@
+# golden: live_eternal_helm (右パネル隣接クロップ、アンカー救済経路)
+Eternal Knight Helm
+Untradable
+Currently Equipped
+Armor
+Hat
+Required Job Warrior
+Required Level Lv. 250
+Set Effect Eternal Set (Warrior)
+STR +388 (80 +159 +149)
+DEX +274 (80 +159 +35)
+LUK +42 (0 +42)
+All Stats +5% (0% +5%)
+Max HP +255 (0 +255)
+Attack Power +130 (10 +120)
+Magic ATT +120 (0 +120)
+Defense +2215 (750 +1465)
+Enemy DEF lgnored +15%
+This item does not show in some situations.
+Potential : Legendary
+Skill Cooldowns -2 sec
+Skill Cooldowns -2 sec
+STR: +10%

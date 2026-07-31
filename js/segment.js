@@ -35,6 +35,7 @@ export function segmentLines(img, bbox) {
     if ((c.y0 + c.y1) / 2 < STAR_BAND) return false;
     if (c.x0 < INSET || c.y0 < INSET || c.x1 >= w - INSET || c.y1 >= h - INSET) return false;
     if (c.x0 >= w - 12 && cw <= 4) return false; // 右端スクロールバー
+    if (cw <= 2 && ch >= 17) return false; // 隣接パネル境界線などの縦棒(大フォントの'l'でも2x14まで)
     if (ch > MAX_TEXT_H || cw > MAX_TEXT_W) return false;
     return !inZone(c); // 1px成分も残す(':'は1pxドット2個)
   });
@@ -118,7 +119,7 @@ export function segmentLines(img, bbox) {
       let area = 0;
       for (const b of first.bitmap.bits) area += b;
       const fill = area / (gw * gh);
-      if (gw >= 4 && gw <= 9 && gh >= 4 && gh <= 9 && fill > 0.82 && first.color !== 'white') {
+      if (gw >= 4 && gw <= 10 && gh >= 4 && gh <= 10 && fill > 0.72 && first.color !== 'white') {
         ln.bullet = first.color;
         ln.glyphs.shift();
       }
