@@ -39,5 +39,6 @@
  "pot3_text": "STR: +9%",
  "pot3_grade": "Unique",
  "extra_lines": "Can't Equip Duplicates",
- "equip_type": "Accessory / Pendant"
+ "equip_type": "Accessory / Pendant",
+ "req_level": 140
 }

@@ -34,5 +34,7 @@
  "pot3_text": "STR: +10%",
  "pot3_grade": "Unique",
  "extra_lines": "Can't Equip Duplicates, Can't Equip Duplicate|(Guardian Angel Ring, Dawn Guardian Angel Ring)|ltems",
- "equip_type": "Accessory / Ring"
+ "equip_type": "Accessory / Ring",
+ "req_level": 160,
+ "flags": "ボーナス不可"
 }

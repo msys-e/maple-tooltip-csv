@@ -171,6 +171,19 @@ td.del:hover { opacity: 1; }
   border-radius: 3px; padding: 1px 6px; font-size: 12px;
 }
 
+/* タブ */
+.tabs { display: flex; gap: 6px; margin-bottom: 10px; }
+.tab-btn {
+  font-family: 'DotGothic16', monospace; font-size: 14px;
+  padding: 8px 22px; border-radius: 6px 6px 0 0;
+  border-bottom: none; opacity: .6;
+}
+.tab-btn.active { opacity: 1; border-color: var(--star); color: var(--star); }
+
+#plan-wrap td.rank { color: var(--star); font-weight: 700; text-align: right; }
+#plan-wrap td.mps { font-weight: 700; }
+#plan-wrap td.cur { color: var(--ink-dim); font-size: 11.5px; }
+
 /* トースト */
 #toasts { position: fixed; right: 18px; bottom: 18px; display: flex; flex-direction: column; gap: 8px; z-index: 50; }
 .toast {

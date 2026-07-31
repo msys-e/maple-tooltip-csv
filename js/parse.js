@@ -140,11 +140,45 @@ export function parseTooltip(lines, starCount) {
   for (const ln of textLines) {
     if (consumed.has(ln)) continue;
     const text = ln.text.trim();
+
+    // 装備Lv: "Required Level Lv. 140" / Lv減少付き "Lv. 140 (160 - 20)"
+    const lvm = /^Required\s*Level\s*Lv\.?\s*(\d+)(?:\s*\(\s*(\d+)\s*-\s*\d+\s*\))?/i.exec(text.replace(/I/g, 'l').replace(/^Requlred/i, 'Required'));
+    if (lvm) {
+      item.req_level = +lvm[1];
+      if (lvm[2]) item.req_level_base = +lvm[2];
+      continue;
+    }
+    // 強化可否フラグ: "Star Force Can't Enhance" / "Bonus Stats Can't Enhance" / 両方併記
+    if (/Can't\s*Enhance/i.test(text) && /^(Star\s*Force|Bonus\s*Stats)/i.test(text)) {
+      if (/Star\s*Force/i.test(text)) item.no_starforce = 1;
+      if (/Bonus\s*Stats/i.test(text)) item.no_bonus_stats = 1;
+      item.flags = [item.no_starforce && 'スタフォ不可', item.no_bonus_stats && 'ボーナス不可']
+        .filter(Boolean).join('|');
+      continue;
+    }
     // 認識できた文字が3文字未満の行は検出範囲外のジャンク(raw_textには残る)
     if (text.replace(/[�\s]/g, '').length < 3) continue;
 
     // 例: "Potential : Legendary" / "Potential : Epic (Fully Enhanced)" → 等級のみ取る
     // 先頭の"L "はポテンシャルアイコンを'L'と誤ラベルした場合の救済
+    // 装備Lv: "Required Level Lv. 140" / "Required Level Lv. 140 (160 - 20)"(軽減表記)
+    const reqLv = /^Required\s*Level\s*Lv\.?\s*(\d+)(?:\s*\((\d+)\s*-\s*\d+\))?/i.exec(text.replace(/I/g, 'l').replace(/lv/i, 'Lv'));
+    if (reqLv) {
+      item.req_level = num(reqLv[1]);
+      if (reqLv[2]) item.req_level_base = num(reqLv[2]);
+      continue;
+    }
+    // 強化可否フラグ("Star Force, Bonus Stats Can't Enhance"等)
+    if (/Star\s*Force.*Can't\s*Enhance/i.test(text)) {
+      item.no_starforce = 1;
+      if (/Bonus\s*Stats/i.test(text)) item.no_bonus_stats = 1;
+      continue;
+    }
+    if (/^Bonus\s*Stats\s*Can't\s*Enhance/i.test(text)) {
+      item.no_bonus_stats = 1;
+      continue;
+    }
+
     const potHead = /^(?:L\s+)?Potential\s*:?\s*([^(]*?)\s*(?:\(.*)?$/.exec(text);
     if (potHead) {
       if (potHead[1].trim()) item.potential_grade = potHead[1].trim(); // 等級欠落行でも空文字で上書きしない

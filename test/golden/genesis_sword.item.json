@@ -33,5 +33,7 @@
  "pot3_text": "Attack Power +13%",
  "pot3_grade": "Legendary",
  "extra_lines": "Soul : Magnificent Verus Hilla Soul|Attack Power +3%|Grants [Red Witch] Skill|One-of-a-kind ltem, Can't Equip Duplicates",
- "equip_type": "Weapon One-handed / Sword"
+ "equip_type": "Weapon One-handed / Sword",
+ "req_level": 200,
+ "flags": "スタフォ不可"
 }

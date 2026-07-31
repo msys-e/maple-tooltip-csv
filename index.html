@@ -50,7 +50,12 @@
   </div>
 </div>
 
-<div class="panel">
+<div class="tabs">
+  <button class="tab-btn active" data-tab="items">装備一覧</button>
+  <button class="tab-btn" data-tab="plan">強化プラン</button>
+</div>
+
+<div class="panel" id="tab-items">
   <div style="margin-bottom:8px">
     <button id="btn-cols" style="font-size:12px;padding:3px 10px">列の表示 ▾</button>
     <div id="col-panel" style="display:none"></div>
@@ -61,6 +66,22 @@
     <kbd>画面共有を開始</kbd> してゲーム内で装備をオンマウス、<br>
     またはスクリーンショットを <kbd>Ctrl+V</kbd> / ドラッグ&amp;ドロップ
   </div>
+</div>
+
+<div class="panel" id="tab-plan" style="display:none">
+  <div style="margin-bottom:10px; display:flex; gap:12px; align-items:center; flex-wrap:wrap">
+    <label>主ステ:
+      <select id="plan-stat">
+        <option value="STR" selected>STR</option>
+        <option value="DEX">DEX</option>
+        <option value="INT">INT</option>
+        <option value="LUK">LUK</option>
+      </select>
+    </label>
+    <span id="plan-summary" style="color:var(--ink-dim);font-size:12px"></span>
+  </div>
+  <div id="plan-wrap" style="overflow-x:auto"></div>
+  <div id="plan-notes" style="color:var(--ink-dim);font-size:12px;margin-top:10px;line-height:1.8"></div>
 </div>
 
 <div class="modal-back" id="labeler-back">

@@ -35,5 +35,6 @@
  "pot2_grade": "Unique",
  "pot3_text": "STR: +10%",
  "pot3_grade": "Unique",
- "equip_type": "Accessory / Face Acc"
+ "equip_type": "Accessory / Face Acc",
+ "req_level": 160
 }

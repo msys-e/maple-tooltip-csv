@@ -6,6 +6,7 @@ import { findTooltip, countStars, TOOLTIP_MIN_W } from './detect.js';
 import { downloadCSV } from './csv.js';
 import * as store from './store.js';
 import { CaptureController, installDropPaste } from './capture.js';
+import { parseRankingCSV, buildPlan, partOf, nearestLv, excludeReason } from './enhance.js';
 import { Labeler } from './labeler.js';
 
 const $ = (id) => document.getElementById(id);
@@ -174,6 +175,7 @@ function render() {
   }
   html += '</tbody></table>';
   wrap.innerHTML = html;
+  if ($('tab-plan').style.display !== 'none') renderPlan(); // プラン表示中は装備追加に追従
   for (const th of wrap.querySelectorAll('th.sortable')) {
     th.addEventListener('click', (e) => {
       if (e.target.closest('.flt')) { openFilterMenu(e.target.closest('.flt')); return; }
@@ -285,6 +287,70 @@ $('table-wrap').addEventListener('click', (e) => {
   if (v !== undefined && v !== '') copyText(v, cell);
 });
 $('zoom-back').addEventListener('click', () => $('zoom-back').classList.remove('show'));
+
+// ---------- タブ・強化プラン ----------
+let rankingTable = [];
+
+for (const btn of document.querySelectorAll('.tab-btn')) {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach((b) => b.classList.toggle('active', b === btn));
+    $('tab-items').style.display = btn.dataset.tab === 'items' ? 'block' : 'none';
+    $('tab-plan').style.display = btn.dataset.tab === 'plan' ? 'block' : 'none';
+    if (btn.dataset.tab === 'plan') renderPlan();
+  });
+}
+$('plan-stat').addEventListener('change', renderPlan);
+
+function potSummary(it) {
+  return [1, 2, 3].map((n) => it[`pot${n}_text`]).filter(Boolean)
+    .map((t) => t.replace(/\s*\+/, '+').replace(/All Stats/i, 'ALL').replace(/Attack Power/i, '攻').replace(/Boss Damage/i, 'ボス').replace(/Critical Damage/i, 'クリダメ').replace(/:\s*/, ''))
+    .join(' · ');
+}
+
+function renderPlan() {
+  const wrap = $('plan-wrap');
+  if (!rankingTable.length) {
+    wrap.innerHTML = '<div style="color:var(--ink-dim);padding:20px">強化効率表(data/ranking.csv)が読み込めていません</div>';
+    return;
+  }
+  const mainStat = $('plan-stat').value;
+  const plan = buildPlan(items, rankingTable, mainStat);
+  $('plan-summary').textContent = `対象 ${new Set(plan.map((p) => p.item)).size} 装備 / ${plan.length} アクション (メソ/スコア効率順)`;
+  if (!plan.length) {
+    wrap.innerHTML = '<div style="color:var(--ink-dim);padding:20px">適用可能な強化がありません(装備一覧タブで装備を取り込んでください)</div>';
+    $('plan-notes').textContent = '';
+    return;
+  }
+  let html = '<table><thead><tr><th>#</th><th>アイテム</th><th>部位/Lv</th><th>現状</th><th>強化内容</th><th>設定</th><th>期待メソ(B)</th><th>スコア</th><th class="grp-star">メソ/スコア(M)</th></tr></thead><tbody>';
+  plan.forEach((p, i) => {
+    const it = p.item, r = p.row;
+    const cur = r.kind === 'star' ? `★${it.star_count}` : potSummary(it);
+    html += `<tr>` +
+      `<td class="rank">${i + 1}</td>` +
+      `<td class="name" data-v="${esc(it.item_name)}">${esc(it.item_name)}</td>` +
+      `<td data-v="${esc(partOf(it.equip_type) ?? '')}">${esc(partOf(it.equip_type) ?? '')} Lv${nearestLv(it.req_level_base ?? it.req_level)}</td>` +
+      `<td class="cur">${esc(cur)}</td>` +
+      `<td data-v="${esc(r.item)}">${esc(r.item)}</td>` +
+      `<td data-v="${esc(r.setting)}">${esc(r.setting)}</td>` +
+      `<td data-v="${r.meso}">${r.meso}</td>` +
+      `<td data-v="${r.score}">${r.score}</td>` +
+      `<td class="mps" data-v="${r.mps}">${r.mps}</td></tr>`;
+  });
+  html += '</tbody></table>';
+  wrap.innerHTML = html;
+  // 対象外の注記
+  const notes = [];
+  for (const it of items) {
+    const reason = excludeReason(it, rankingTable, mainStat);
+    if (reason) notes.push(`${it.item_name}: ${reason}`);
+  }
+  const lvNote = items.some((it) => {
+    const lv = it.req_level_base ?? it.req_level;
+    return Number.isFinite(lv) && !([100, 150, 160, 200, 250].includes(lv));
+  }) ? '※表にないLvの装備は最寄りのLv(120→100、140→150等)に丸めて評価しています' : '';
+  $('plan-notes').innerHTML = [lvNote, notes.length ? `対象外: ${notes.map(esc).join(' ／ ')}` : '']
+    .filter(Boolean).join('<br>');
+}
 
 $('btn-cols').addEventListener('click', () => {
   const p = $('col-panel');
@@ -622,6 +688,11 @@ function installLearnHook() {
   }
   for (const [k, v] of Object.entries(store.loadUserBank())) bank.add(k, v);
   installLearnHook();
+  try {
+    rankingTable = parseRankingCSV(await (await fetch(`data/ranking.csv?v=${Date.now()}`)).text());
+  } catch {
+    toast('強化効率表(ranking.csv)の読み込みに失敗しました', 'warn');
+  }
   renderColPanel();
   render();
   refreshSnapshots();

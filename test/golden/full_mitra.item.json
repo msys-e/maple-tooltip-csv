@@ -13,5 +13,7 @@
  "pot2_grade": "Unique",
  "pot3_text": "Attack Power +10%",
  "pot3_grade": "Unique",
- "equip_type": "Emblem / Power Source / Emblem"
+ "equip_type": "Emblem / Power Source / Emblem",
+ "req_level": 200,
+ "flags": "スタフォ不可|ボーナス不可"
 }
