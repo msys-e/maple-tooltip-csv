@@ -93,8 +93,10 @@ export function parseTooltip(lines, starCount) {
     const foldT = (s) => s.replace(/I/g, 'l');
     const curIdx = textLines.findIndex((l) => /^Currently\s*Equ/i.test(l.text.trim()));
     const reqIdx = textLines.findIndex((l) => /^Required\s*(Job|Level)/i.test(foldT(l.text.trim())));
-    const from = curIdx >= 0 ? curIdx + 1 : (nameLine ? textLines.indexOf(nameLine) + 1 : 0);
-    if (reqIdx > from) {
+    // 名前行不明時は抽出しない(先頭ジャンクを種別に取り込まないため)
+    const nameIdx = nameLine ? textLines.indexOf(nameLine) : -1;
+    const from = nameIdx < 0 ? -1 : Math.max(curIdx + 1, nameIdx + 1);
+    if (from >= 0 && reqIdx > from) {
       const chips = [];
       for (let i = from; i < reqIdx; i++) {
         const t = textLines[i].text.trim();

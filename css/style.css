@@ -124,6 +124,23 @@ th.sortable:hover { color: var(--star); }
 }
 #col-panel label { cursor: pointer; white-space: nowrap; color: var(--ink-dim); }
 #col-panel input { accent-color: var(--star); vertical-align: -2px; }
+
+/* 列フィルタ(オートフィルタ風) */
+th .flt { margin-left: 4px; opacity: .45; cursor: pointer; font-size: 9px; }
+th .flt:hover { opacity: 1; color: var(--star); }
+th .flt.active { opacity: 1; color: var(--cyan); }
+#filter-menu {
+  position: absolute; z-index: 120;
+  background: var(--panel); border: 1px solid var(--star); border-radius: 6px;
+  padding: 10px 12px; max-height: 320px; overflow-y: auto; min-width: 180px; max-width: 250px;
+  box-shadow: 0 6px 20px rgba(0,0,0,.5);
+  display: flex; flex-direction: column; gap: 4px; font-size: 12.5px;
+}
+#filter-menu .fm-head { font-family: 'DotGothic16', monospace; color: var(--star); font-size: 12px; margin-bottom: 4px; }
+#filter-menu label { cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#filter-menu input { accent-color: var(--cyan); vertical-align: -2px; }
+#filter-menu .fm-actions { display: flex; gap: 6px; margin-top: 6px; }
+#filter-menu .fm-actions button { font-size: 11px; padding: 3px 8px; }
 th.grp-star { color: var(--star); }
 th.grp-bonus { color: var(--cyan); }
 td { font-family: var(--mono); font-size: 12.5px; cursor: pointer; }

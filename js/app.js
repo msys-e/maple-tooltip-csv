@@ -112,19 +112,29 @@ let colVis = (() => {
 })();
 const isVisible = (key) => colVis[key] !== false;
 let sortState = null; // {key, dir: 1|-1}
+const filters = new Map(); // colKey -> Set(許可する値の文字列表現)。未登録=フィルタなし
+
+const filterKeyOf = (v) => (v === undefined || v === '' ? '' : String(v));
 
 function sortedView() {
-  const view = items.map((it, i) => ({ it, i }));
+  let view = items.map((it, i) => ({ it, i }));
+  for (const [key, allowed] of filters) {
+    view = view.filter(({ it }) => allowed.has(filterKeyOf(it[key])));
+  }
   if (sortState) {
     const { key, dir } = sortState;
     const def = COL_DEFS.find((d) => d.key === key);
     view.sort((a, b) => {
-      const va = a.it[key], vb = b.it[key];
-      if (va === undefined && vb === undefined) return 0;
-      if (va === undefined) return 1;  // 空値は常に末尾
-      if (vb === undefined) return -1;
-      if (def?.str) return String(va).localeCompare(String(vb)) * dir;
-      return (Number(va) - Number(vb)) * dir;
+      const ea = a.it[key] === undefined || a.it[key] === '';
+      const eb = b.it[key] === undefined || b.it[key] === '';
+      if (ea && eb) return 0;
+      if (ea) return 1;  // 空値は常に末尾
+      if (eb) return -1;
+      if (def?.str) return String(a.it[key]).localeCompare(String(b.it[key])) * dir;
+      const na = Number(a.it[key]), nb = Number(b.it[key]);
+      if (Number.isNaN(na)) return 1; // 数値化できない値(誤読等)は末尾
+      if (Number.isNaN(nb)) return -1;
+      return (na - nb) * dir;
     });
   }
   return view;
@@ -139,7 +149,9 @@ function render() {
   let html = '<table><thead><tr><th></th>';
   for (const d of cols) {
     const arrow = sortState?.key === d.key ? (sortState.dir === 1 ? ' ▲' : ' ▼') : '';
-    html += `<th class="sortable ${d.cls === 'c-bonus' ? 'grp-bonus' : ''} ${d.star ? 'grp-star' : ''}" data-sort="${d.key}">${d.label}${arrow}</th>`;
+    const fActive = filters.has(d.key);
+    html += `<th class="sortable ${d.cls === 'c-bonus' ? 'grp-bonus' : ''} ${d.star ? 'grp-star' : ''}" data-sort="${d.key}">` +
+      `${d.label}${arrow}<span class="flt ${fActive ? 'active' : ''}" data-flt="${d.key}" title="値で絞り込み">▼</span></th>`;
   }
   html += '<th></th></tr></thead><tbody>';
   for (const { it, i } of sortedView()) {
@@ -163,7 +175,8 @@ function render() {
   html += '</tbody></table>';
   wrap.innerHTML = html;
   for (const th of wrap.querySelectorAll('th.sortable')) {
-    th.addEventListener('click', () => {
+    th.addEventListener('click', (e) => {
+      if (e.target.closest('.flt')) { openFilterMenu(e.target.closest('.flt')); return; }
       const key = th.dataset.sort;
       sortState = (sortState?.key === key)
         ? (sortState.dir === 1 ? { key, dir: -1 } : null) // 昇順→降順→解除
@@ -173,6 +186,52 @@ function render() {
   }
   updateMeta();
 }
+
+// Excelのオートフィルタ風: 列の値一覧チェックボックスで絞り込み
+function openFilterMenu(fltEl) {
+  const key = fltEl.dataset.flt;
+  const def = COL_DEFS.find((d) => d.key === key);
+  const menu = $('filter-menu');
+  const values = [...new Set(items.map((it) => filterKeyOf(it[key])))];
+  values.sort((a, b) => {
+    if (a === '') return 1;
+    if (b === '') return -1;
+    return def?.str ? a.localeCompare(b) : Number(a) - Number(b);
+  });
+  const allowed = filters.get(key);
+  menu.innerHTML =
+    `<div class="fm-head">${def?.label ?? key} で絞り込み</div>` +
+    values.map((v) =>
+      `<label><input type="checkbox" value="${esc(v)}" ${!allowed || allowed.has(v) ? 'checked' : ''}> ${v === '' ? '(空白)' : esc(v)}</label>`
+    ).join('') +
+    '<div class="fm-actions"><button data-act="all">全て</button><button data-act="none">なし</button><button data-act="close">適用して閉じる</button></div>';
+  const rect = fltEl.getBoundingClientRect();
+  menu.style.left = `${Math.min(rect.left, window.innerWidth - 260)}px`;
+  menu.style.top = `${rect.bottom + 4 + window.scrollY}px`;
+  menu.style.display = 'block';
+
+  const apply = () => {
+    const checked = new Set([...menu.querySelectorAll('input:checked')].map((c) => c.value));
+    if (checked.size === values.length) filters.delete(key); // 全選択=フィルタなし
+    else filters.set(key, checked);
+    render();
+  };
+  for (const cb of menu.querySelectorAll('input')) cb.addEventListener('change', apply);
+  for (const b of menu.querySelectorAll('button')) {
+    b.addEventListener('click', () => {
+      if (b.dataset.act === 'all') { menu.querySelectorAll('input').forEach((c) => { c.checked = true; }); apply(); }
+      else if (b.dataset.act === 'none') { menu.querySelectorAll('input').forEach((c) => { c.checked = false; }); apply(); }
+      else menu.style.display = 'none';
+    });
+  }
+}
+
+document.addEventListener('click', (e) => {
+  const menu = $('filter-menu');
+  if (menu.style.display !== 'none' && !e.target.closest('#filter-menu') && !e.target.closest('.flt')) {
+    menu.style.display = 'none';
+  }
+});
 
 // 列表示チェックボックスパネル
 function renderColPanel() {
@@ -184,6 +243,7 @@ function renderColPanel() {
     cb.addEventListener('change', () => {
       colVis[cb.dataset.col] = cb.checked;
       localStorage.setItem('mtc:cols', JSON.stringify(colVis));
+      if (!cb.checked && sortState?.key === cb.dataset.col) sortState = null; // 見えない列でのソート残留を防ぐ
       render();
     });
   }
