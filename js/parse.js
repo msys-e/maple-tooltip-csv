@@ -87,6 +87,25 @@ export function parseTooltip(lines, starCount) {
     for (let i = 0; i < textLines.indexOf(nameLine); i++) consumed.add(textLines[i]);
   }
 
+  // 装備種別: "Currently Equipped"(無ければ名前)と "Required Job/Level" の間の
+  // チップ行(Accessory/Pendant、Weapon One-handed/Sword 等、1〜3行)を連結する
+  {
+    const foldT = (s) => s.replace(/I/g, 'l');
+    const curIdx = textLines.findIndex((l) => /^Currently\s*Equ/i.test(l.text.trim()));
+    const reqIdx = textLines.findIndex((l) => /^Required\s*(Job|Level)/i.test(foldT(l.text.trim())));
+    const from = curIdx >= 0 ? curIdx + 1 : (nameLine ? textLines.indexOf(nameLine) + 1 : 0);
+    if (reqIdx > from) {
+      const chips = [];
+      for (let i = from; i < reqIdx; i++) {
+        const t = textLines[i].text.trim();
+        if (/^(Untradable|Special\s*[Il]tem|Duration)/i.test(t)) continue;
+        chips.push(t);
+        consumed.add(textLines[i]);
+      }
+      if (chips.length) item.equip_type = chips.join(' / ');
+    }
+  }
+
   // 星数: 名前の直上~95px以内(星ゾーン)で星形の黄ブロブを数える。
   // ★23以上はキラキラ粒子が星に癒着してisStars判定が崩れるため、
   // isStars行に限らずゾーン内の全行から星形グリフを拾い、

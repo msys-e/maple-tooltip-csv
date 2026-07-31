@@ -115,6 +115,15 @@ th {
   background: #2a2a38; color: var(--ink-dim);
   position: sticky; top: 0;
 }
+th.sortable { cursor: pointer; user-select: none; }
+th.sortable:hover { color: var(--star); }
+#col-panel {
+  display: flex; flex-wrap: wrap; gap: 4px 14px;
+  background: var(--bg2); border: 1px solid var(--panel-edge); border-radius: 4px;
+  padding: 8px 12px; margin-top: 6px; font-size: 12px;
+}
+#col-panel label { cursor: pointer; white-space: nowrap; color: var(--ink-dim); }
+#col-panel input { accent-color: var(--star); vertical-align: -2px; }
 th.grp-star { color: var(--star); }
 th.grp-bonus { color: var(--cyan); }
 td { font-family: var(--mono); font-size: 12.5px; cursor: pointer; }

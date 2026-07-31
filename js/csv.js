@@ -7,7 +7,7 @@ const STAT_BASES = [
 ];
 
 export const COLUMNS = [
-  'timestamp', 'item_name', 'star_count',
+  'timestamp', 'item_name', 'equip_type', 'star_count',
   ...STAT_BASES.flatMap((b) => [`${b}_total`, `${b}_base`, `${b}_star`, `${b}_bonus`]),
   'potential_grade',
   'pot1_text', 'pot1_grade', 'pot2_text', 'pot2_grade', 'pot3_text', 'pot3_grade',

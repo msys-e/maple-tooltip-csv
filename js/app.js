@@ -96,34 +96,97 @@ function breakdownTitle(it, col) {
   return parts.join(' ');
 }
 
+// 全列定義(表示制御・ソートの単位)
+const COL_DEFS = [
+  { key: 'item_name', label: 'アイテム', cls: 'name', str: true },
+  { key: 'equip_type', label: '種別', cls: '', str: true },
+  { key: 'star_count', label: '★', cls: 'stars', star: true },
+  ...TABLE_COLS.map(([key, label, cls]) => ({ key, label, cls })),
+  { key: 'pot1_text', label: '潜在1', str: true, pot: 1 },
+  { key: 'pot2_text', label: '潜在2', str: true, pot: 2 },
+  { key: 'pot3_text', label: '潜在3', str: true, pot: 3 },
+];
+
+let colVis = (() => {
+  try { return JSON.parse(localStorage.getItem('mtc:cols')) || {}; } catch { return {}; }
+})();
+const isVisible = (key) => colVis[key] !== false;
+let sortState = null; // {key, dir: 1|-1}
+
+function sortedView() {
+  const view = items.map((it, i) => ({ it, i }));
+  if (sortState) {
+    const { key, dir } = sortState;
+    const def = COL_DEFS.find((d) => d.key === key);
+    view.sort((a, b) => {
+      const va = a.it[key], vb = b.it[key];
+      if (va === undefined && vb === undefined) return 0;
+      if (va === undefined) return 1;  // 空値は常に末尾
+      if (vb === undefined) return -1;
+      if (def?.str) return String(va).localeCompare(String(vb)) * dir;
+      return (Number(va) - Number(vb)) * dir;
+    });
+  }
+  return view;
+}
+
 function render() {
   const wrap = $('table-wrap');
   $('empty-hint').style.display = items.length ? 'none' : 'block';
   if (!items.length) { wrap.innerHTML = ''; updateMeta(); return; }
 
-  let html = '<table><thead><tr><th></th><th>アイテム</th><th class="grp-star">★</th>';
-  for (const [, label, cls] of TABLE_COLS) html += `<th class="${cls ? 'grp-bonus' : ''}">${label}</th>`;
-  html += '<th>潜在1</th><th>潜在2</th><th>潜在3</th><th></th></tr></thead><tbody>';
-  items.forEach((it, idx) => {
-    html += `<tr data-idx="${idx}">`;
+  const cols = COL_DEFS.filter((d) => isVisible(d.key));
+  let html = '<table><thead><tr><th></th>';
+  for (const d of cols) {
+    const arrow = sortState?.key === d.key ? (sortState.dir === 1 ? ' ▲' : ' ▼') : '';
+    html += `<th class="sortable ${d.cls === 'c-bonus' ? 'grp-bonus' : ''} ${d.star ? 'grp-star' : ''}" data-sort="${d.key}">${d.label}${arrow}</th>`;
+  }
+  html += '<th></th></tr></thead><tbody>';
+  for (const { it, i } of sortedView()) {
+    html += `<tr data-idx="${i}">`;
     html += `<td class="thumb">${it.thumb ? `<img src="${it.thumb}" alt="">` : ''}</td>`;
-    html += `<td class="name" data-v="${esc(it.item_name)}" title="取得: ${esc((it.timestamp || '').replace('T', ' ').slice(0, 16))}">${esc(it.item_name)}</td>`;
-    html += `<td class="stars" data-v="${it.star_count}">★${it.star_count}</td>`;
-    for (const [col, , cls] of TABLE_COLS) {
-      const v = it[col];
-      html += v === undefined
-        ? '<td></td>'
-        : `<td class="${cls}" data-v="${v}" title="${esc(breakdownTitle(it, col))}">${v}</td>`;
-    }
-    for (const n of [1, 2, 3]) {
-      const t = it[`pot${n}_text`] || '';
-      html += `<td class="grade-${it[`pot${n}_grade`] || ''}" data-v="${esc(t)}" title="${esc(it[`pot${n}_grade`] || '')}">${esc(t)}</td>`;
+    for (const d of cols) {
+      const v = it[d.key];
+      if (v === undefined || v === '') { html += '<td></td>'; continue; }
+      if (d.key === 'item_name') {
+        html += `<td class="name" data-v="${esc(v)}" title="取得: ${esc((it.timestamp || '').replace('T', ' ').slice(0, 16))}">${esc(v)}</td>`;
+      } else if (d.star) {
+        html += `<td class="stars" data-v="${v}">★${v}</td>`;
+      } else if (d.pot) {
+        html += `<td class="grade-${it[`pot${d.pot}_grade`] || ''}" data-v="${esc(v)}" title="${esc(it[`pot${d.pot}_grade`] || '')}">${esc(v)}</td>`;
+      } else {
+        html += `<td class="${d.cls}" data-v="${esc(v)}" title="${esc(breakdownTitle(it, d.key))}">${esc(v)}</td>`;
+      }
     }
     html += '<td class="del" title="この行を削除">×</td></tr>';
-  });
+  }
   html += '</tbody></table>';
   wrap.innerHTML = html;
+  for (const th of wrap.querySelectorAll('th.sortable')) {
+    th.addEventListener('click', () => {
+      const key = th.dataset.sort;
+      sortState = (sortState?.key === key)
+        ? (sortState.dir === 1 ? { key, dir: -1 } : null) // 昇順→降順→解除
+        : { key, dir: 1 };
+      render();
+    });
+  }
   updateMeta();
+}
+
+// 列表示チェックボックスパネル
+function renderColPanel() {
+  const panel = $('col-panel');
+  panel.innerHTML = COL_DEFS.map((d) =>
+    `<label><input type="checkbox" data-col="${d.key}" ${isVisible(d.key) ? 'checked' : ''}> ${d.label}</label>`
+  ).join('');
+  for (const cb of panel.querySelectorAll('input')) {
+    cb.addEventListener('change', () => {
+      colVis[cb.dataset.col] = cb.checked;
+      localStorage.setItem('mtc:cols', JSON.stringify(colVis));
+      render();
+    });
+  }
 }
 
 function esc(s) {
@@ -162,6 +225,11 @@ $('table-wrap').addEventListener('click', (e) => {
   if (v !== undefined && v !== '') copyText(v, cell);
 });
 $('zoom-back').addEventListener('click', () => $('zoom-back').classList.remove('show'));
+
+$('btn-cols').addEventListener('click', () => {
+  const p = $('col-panel');
+  p.style.display = p.style.display === 'none' ? 'flex' : 'none';
+});
 
 // ---------- 認識パイプライン ----------
 function cropToCanvas(img, bbox) {
@@ -494,6 +562,7 @@ function installLearnHook() {
   }
   for (const [k, v] of Object.entries(store.loadUserBank())) bank.add(k, v);
   installLearnHook();
+  renderColPanel();
   render();
   refreshSnapshots();
 })();
