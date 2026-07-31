@@ -87,12 +87,29 @@ export function parseTooltip(lines, starCount) {
     for (let i = 0; i < textLines.indexOf(nameLine); i++) consumed.add(textLines[i]);
   }
 
-  // 星数: 名前の直上~90px以内の星列のみ数える(それより上のはインベントリ等の誤検知)
-  const starGlyphs = lines
-    .filter((l) => l.isStars && (!nameLine || (l.y1 <= nameLine.y0 && l.y1 >= nameLine.y0 - 90)))
-    .reduce((s, l) => s + l.glyphs.length, 0);
-  // 名前行が特定できたなら星は必ずisStars行由来(無ければ星0)。
-  // バンド由来のフォールバック値は文字を星と誤認し得るため名前不明時のみ使う
+  // 星数: 名前の直上~95px以内(星ゾーン)で星形の黄ブロブを数える。
+  // ★23以上はキラキラ粒子が星に癒着してisStars判定が崩れるため、
+  // isStars行に限らずゾーン内の全行から星形グリフを拾い、
+  // キラキラで連結した幅広ブロブは幅から星数を推定する(星ピッチ~12px)
+  const ink = (g) => {
+    let s = 0;
+    for (const b of g.bitmap.bits) s += b;
+    return s;
+  };
+  let starGlyphs = 0;
+  for (const l of lines) {
+    if (nameLine && !(l.y1 <= nameLine.y0 && l.y1 >= nameLine.y0 - 95)) continue;
+    if (!nameLine && !l.isStars) continue;
+    const cand = l.glyphs.filter((g) => {
+      const gw = g.x1 - g.x0 + 1, gh = g.y1 - g.y0 + 1;
+      return g.color === 'yellow' && gh >= 5 && gh <= 16 && gw >= 5 && ink(g) >= 14;
+    });
+    if (cand.length < 2) continue; // 星は必ず複数並ぶ。単発の黄ブロブはノイズ
+    starGlyphs += cand.reduce((s, g) => {
+      const gw = g.x1 - g.x0 + 1;
+      return s + (gw <= 16 ? 1 : Math.max(1, Math.round(gw / 12)));
+    }, 0);
+  }
   if (nameLine) item.star_count = starGlyphs;
   else if (starGlyphs > 0) item.star_count = starGlyphs;
 
