@@ -17,7 +17,11 @@ export class CaptureController {
     this.ctx = this.canvas.getContext('2d', { willReadFrequently: true });
     this.lastHash = null;
     this.stableN = 0;
-    this.processed = new Set(); // aHash → 処理済み
+    this.processed = []; // {ah, size} 処理済み(ハミング許容つき照合)
+  }
+
+  _isProcessed(ah, size) {
+    return this.processed.some((p) => p.size === size && hammingHex(p.ah, ah) <= 6);
   }
 
   get running() { return !!this.stream; }
@@ -75,16 +79,20 @@ export class CaptureController {
     if (this.lastHash && hammingHex(ah, this.lastHash) <= 6) this.stableN++;
     else this.stableN = 0;
     this.lastHash = ah;
-    const procKey = `${ah}:${found.w}x${found.h}`;
-    if (this.stableN >= STABLE_COUNT && !this.processed.has(procKey)) {
-      this.processed.add(procKey);
+    const size = `${found.w}x${found.h}`;
+    if (this.stableN >= STABLE_COUNT && !this._isProcessed(ah, size)) {
       info.tip = '認識中…';
       this.cb.onInfo(info);
       const result = this.cb.onTooltip(img, found);
-      if (result === 'error') this.processed.delete(procKey); // 保存失敗は再ホバーでリトライ可能に
+      // error(保存失敗)/lowq(エフェクト被り等で品質低) は処理済みにせず次フレームで再試行
+      if (result !== 'error' && result !== 'lowq') this.processed.push({ ah, size });
+      if (result === 'lowq') {
+        info.tip = '認識品質低(エフェクト被り?) — 再試行中';
+        this.cb.onInfo(info);
+      }
       return;
     }
-    info.tip = this.processed.has(procKey) ? '取得済み(次の装備へ)' : `検出 (${found.w}x${found.h})`;
+    info.tip = this._isProcessed(ah, size) ? '取得済み(次の装備へ)' : `検出 (${found.w}x${found.h})`;
     this.cb.onInfo(info);
   }
 }

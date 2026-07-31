@@ -214,6 +214,13 @@ function processTooltip(img, bbox, { silent = false } = {}) {
   }
   const item = preItem;
   delete item._name_y;
+  // 品質ゲート: 名前は読めたのにステータスも潜在も無い → エフェクト被り等で
+  // 文字が輝度飽和に飲まれた可能性が高い。取り込まず次のフレームに任せる
+  const statTotals = Object.keys(item).filter((k) => k.endsWith('_total') && item[k] !== undefined).length;
+  if (item.item_name && statTotals === 0 && !item.potential_grade) {
+    if (!silent) toast(`認識品質が低いため再試行: ${item.item_name}`, 'warn');
+    return 'lowq';
+  }
   const key = itemKey(item);
   if (itemKeys.has(key)) {
     if (!silent) toast(`重複スキップ: ${item.item_name}`, 'warn');
@@ -436,7 +443,7 @@ $('btn-clear').addEventListener('click', () => {
   if (!confirm(`表の ${items.length} 件をクリアしますか?\n(スナップショットは残ります)`)) return;
   items = [];
   itemKeys.clear();
-  capture.processed.clear();
+  capture.processed.length = 0;
   store.saveItems(items);
   render();
   toast('クリアしました', 'warn');
