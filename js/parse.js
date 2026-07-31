@@ -100,6 +100,9 @@ export function parseTooltip(lines, starCount) {
   for (const l of lines) {
     if (nameLine && !(l.y1 <= nameLine.y0 && l.y1 >= nameLine.y0 - 95)) continue;
     if (!nameLine && !l.isStars) continue;
+    // 注: 高さ上限の緩和・テキスト行除外等も試したが、実フレーム9枚の実測では
+    //     この単純な形が最良(sparkle★24=24, 他8枚一致)。理論上は星ゾーンに
+    //     黄色テキスト行が混入すると誤計数し得るが実測では未観測
     const cand = l.glyphs.filter((g) => {
       const gw = g.x1 - g.x0 + 1, gh = g.y1 - g.y0 + 1;
       return g.color === 'yellow' && gh >= 5 && gh <= 16 && gw >= 5 && ink(g) >= 14;

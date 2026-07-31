@@ -190,9 +190,12 @@ function processTooltip(img, bbox, { silent = false } = {}) {
   const preItem = parseTooltip(rec, stars);
   const nameY = preItem._name_y ?? -1;
   const realChars = (ln) => (ln.text || '').replace(/[�\s]/g, '').length;
+  // 本文の最終行(認識3文字以上)より下だけを「下端ジャンク」とみなす。
+  // 本文中の未知だらけの行(新出テキスト等)はラベラーに届く
+  const lastRealY = Math.max(-1, ...rec.filter((l) => realChars(l) >= 3).map((l) => l.y0));
   const unknowns = rec.flatMap((ln) => {
     if (nameY >= 0 && ln.y1 < nameY - 2) return [];
-    if (realChars(ln) < 3) return [];
+    if (realChars(ln) < 3 && ln.y0 > lastRealY) return [];
     return ln.unknowns.map((g) => ({ g, ln }));
   });
   if (unknowns.length) {
