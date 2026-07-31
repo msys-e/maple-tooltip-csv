@@ -16,7 +16,7 @@ const SAMPLES = [
   'endless_terror', 'dawn_ring_b', 'superior_gollux', 'magic_eyepatch',
   'source_of_suffering', 'commanding_force', 'daybreak_pendant', 'dreamy_belt', 'cursed_spellbook',
   'eternal_helm', 'eternal_armor', 'eternal_pants', 'arcane_shoulder', 'arcane_cape',
-  'arcane_gloves', 'arcane_shoes', 'arcane_shoes_b', 'black_heart', 'live_eternal_helm',
+  'arcane_gloves', 'arcane_shoes', 'arcane_shoes_b', 'black_heart', 'live_eternal_helm', 'live_princess_gem',
 ];
 const OUT = new URL('./out/', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1');
 const ROOT = new URL('../', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1');

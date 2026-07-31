@@ -76,7 +76,7 @@ export function parseTooltip(lines, starCount) {
   const textLines = lines.filter((l) => !l.isStars && l.text.trim().length > 0);
   // アイテム名 = 定型キーワード行(Untradable/Currently Equipped/Required Job)の直前の行。
   // 検出上端が行き過ぎてツールチップ外のジャンク行が先頭に混ざっても名前を取り違えない
-  const kw = /^(Untradable|Currently\s*Equ|Required\s*(Job|Level)|Special\s*Item)/i;
+  const kw = /^(Untradable|Currently\s*Equ|Required\s*(Job|Level)|Special\s*[Il]tem)/i; // OCRはIをlと読む
   const kwIdx = textLines.findIndex((l) => kw.test(l.text.trim()));
   const nameLine = kwIdx > 0 ? textLines[kwIdx - 1] : (kwIdx === -1 && textLines.length ? textLines[0] : null);
   item._name_y = nameLine ? nameLine.y0 : -1; // 内部用: 名前行より上=ジャンク領域の境界

@@ -102,11 +102,13 @@ export class GlyphBank {
     if (!best) return null;
     let inkB = 0;
     for (const b of best.bits) inkB += b;
-    const allowed = Math.max(3, Math.ceil(0.22 * Math.max(inkD, inkB)));
+    // 22%は名前フォントで E→B 等の別文字誤吸着を起こした(実害)ため15%に締める。
+    // 輝度マスク化後はライブ字形の一致が良く、この許容で十分
+    const allowed = Math.max(3, Math.ceil(0.15 * Math.max(inkD, inkB)));
     if (inkD <= 8 && bestMis > 2) return null; // 小型グリフは厳しめ
     if (bestMis > allowed) return null;
-    // 弱い一致(不一致3以上)のときだけ、別ラベルの次点と僅差なら曖昧として棄却
-    if (bestMis >= 3 && secondLabel !== null && second - bestMis < 2) return null;
+    // 弱い一致(不一致3以上)で別ラベルの次点と僅差なら曖昧として棄却
+    if (bestMis >= 3 && secondLabel !== null && second - bestMis < 3) return null;
     return { label: best.label, dist: bestMis };
   }
   toJSON() {

@@ -194,6 +194,8 @@ function boxFromAnchor(img, a) {
       x++;
     }
     right = x;
+    // 右縁ランが隣接パネルへ突き抜けた場合は既定幅にクランプ(左端はアンカー由来で信頼できる)
+    if (right - bx + 3 > TOOLTIP_MAX_W) right = bx + 320;
   }
   const bbox = { x: Math.max(0, bx), y: Math.max(0, top - 1), w: right - bx + 3, h: bottom - top + 4 };
   if (bbox.x + bbox.w > w) bbox.w = w - bbox.x;
