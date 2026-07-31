@@ -187,6 +187,8 @@ function processTooltip(img, bbox, { silent = false } = {}) {
   const rec = recognizeLines(lines, bank);
   const unknowns = rec.flatMap((ln) => ln.unknowns.map((g) => ({ g, ln })));
   if (unknowns.length) {
+    lastUnknownFrame = img; // 診断用: 未知が出たフレームを保持
+    console.log('[mtc] unknowns', unknowns.map(({ g }) => g.key));
     for (const { g, ln } of unknowns) labeler.add(g, lineCanvas(canvas, ln));
     pending.push({ img, bbox });
     $('unknown-count').textContent = labeler.count;
@@ -292,6 +294,19 @@ $('btn-capture').addEventListener('click', async () => {
 
 installDropPaste((img) => processImage(img));
 
+let lastUnknownFrame = null;
+
+function savePng(img, name) {
+  const c = document.createElement('canvas');
+  c.width = img.width;
+  c.height = img.height;
+  c.getContext('2d').putImageData(img, 0, 0);
+  const a = document.createElement('a');
+  a.href = c.toDataURL('image/png');
+  a.download = name;
+  a.click();
+}
+
 function saveCurrentFrame() {
   const img = capture.lastFrame;
   if (!img) { toast('共有中のフレームがありません', 'warn'); return; }
@@ -305,6 +320,12 @@ function saveCurrentFrame() {
   a.click();
 }
 $('btn-frame-save').addEventListener('click', saveCurrentFrame);
+$('btn-unknown-frame').addEventListener('click', (e) => {
+  e.stopPropagation(); // バナー本体のラベラー起動を抑止
+  if (!lastUnknownFrame) { toast('未知発生フレームがありません', 'warn'); return; }
+  savePng(lastUnknownFrame, `unknown_frame_${Date.now()}.png`);
+  toast('未知発生フレームを保存しました');
+});
 $('btn-frame-save-delay').addEventListener('click', () => {
   // ボタンを押してからゲームへ移ってホバーする猶予を作る
   let left = 3;
