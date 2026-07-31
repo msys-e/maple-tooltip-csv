@@ -6,7 +6,7 @@ import { findTooltip, countStars, TOOLTIP_MIN_W } from './detect.js';
 import { downloadCSV } from './csv.js';
 import * as store from './store.js';
 import { CaptureController, installDropPaste } from './capture.js';
-import { parseRankingCSV, buildPlan, partOf, nearestLv, excludeReason } from './enhance.js';
+import { parseRankingCSV, buildPlan, partOf, nearestLv, excludeReason, TABLE_LVS } from './enhance.js';
 import { Labeler } from './labeler.js';
 
 const $ = (id) => document.getElementById(id);
@@ -338,15 +338,16 @@ function renderPlan() {
   });
   html += '</tbody></table>';
   wrap.innerHTML = html;
-  // 対象外の注記
+  // 対象外の注記(適用行が1つもない装備のみ)
+  const planned = new Set(plan.map((p) => p.item));
   const notes = [];
   for (const it of items) {
-    const reason = excludeReason(it, rankingTable, mainStat);
-    if (reason) notes.push(`${it.item_name}: ${reason}`);
+    if (planned.has(it)) continue;
+    notes.push(`${it.item_name}: ${excludeReason(it, rankingTable, mainStat)}`);
   }
   const lvNote = items.some((it) => {
     const lv = it.req_level_base ?? it.req_level;
-    return Number.isFinite(lv) && !([100, 150, 160, 200, 250].includes(lv));
+    return Number.isFinite(lv) && !TABLE_LVS.includes(lv);
   }) ? '※表にないLvの装備は最寄りのLv(120→100、140→150等)に丸めて評価しています' : '';
   $('plan-notes').innerHTML = [lvNote, notes.length ? `対象外: ${notes.map(esc).join(' ／ ')}` : '']
     .filter(Boolean).join('<br>');

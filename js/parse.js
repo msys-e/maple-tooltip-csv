@@ -161,24 +161,6 @@ export function parseTooltip(lines, starCount) {
 
     // 例: "Potential : Legendary" / "Potential : Epic (Fully Enhanced)" → 等級のみ取る
     // 先頭の"L "はポテンシャルアイコンを'L'と誤ラベルした場合の救済
-    // 装備Lv: "Required Level Lv. 140" / "Required Level Lv. 140 (160 - 20)"(軽減表記)
-    const reqLv = /^Required\s*Level\s*Lv\.?\s*(\d+)(?:\s*\((\d+)\s*-\s*\d+\))?/i.exec(text.replace(/I/g, 'l').replace(/lv/i, 'Lv'));
-    if (reqLv) {
-      item.req_level = num(reqLv[1]);
-      if (reqLv[2]) item.req_level_base = num(reqLv[2]);
-      continue;
-    }
-    // 強化可否フラグ("Star Force, Bonus Stats Can't Enhance"等)
-    if (/Star\s*Force.*Can't\s*Enhance/i.test(text)) {
-      item.no_starforce = 1;
-      if (/Bonus\s*Stats/i.test(text)) item.no_bonus_stats = 1;
-      continue;
-    }
-    if (/^Bonus\s*Stats\s*Can't\s*Enhance/i.test(text)) {
-      item.no_bonus_stats = 1;
-      continue;
-    }
-
     const potHead = /^(?:L\s+)?Potential\s*:?\s*([^(]*?)\s*(?:\(.*)?$/.exec(text);
     if (potHead) {
       if (potHead[1].trim()) item.potential_grade = potHead[1].trim(); // 等級欠落行でも空文字で上書きしない

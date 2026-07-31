@@ -92,9 +92,9 @@ export function countPotLines(item, lineKind, mainStat) {
   const re = RES[lineKind];
   let n = 0;
   for (const k of [1, 2, 3]) {
-    const t = (item[`pot${k}_text`] || '').replace(/I/g, 'l').replace(/^l/, 'I').trim();
-    // I/l折り畳み対策: 素のtextでも判定
-    if (re.test(item[`pot${k}_text`] || '') || re.test(t)) n++;
+    const raw = (item[`pot${k}_text`] || '').trim();
+    // OCRは大文字IをlとRead(同字形)するため行頭のみ復元(該当は"INT"のみ)
+    if (re.test(raw) || re.test(raw.replace(/^l/, 'I'))) n++;
   }
   return n;
 }
@@ -105,13 +105,16 @@ export function applicable(item, row, mainStat) {
   if (lv === null || lv !== row.lv) return false;
   if (row.kind === 'star') {
     if (item.no_starforce) return false;
+    // 空文字はNumber('')===0で★0に化けるため明示的に弾く(星認識失敗した装備への誤提案防止)
+    if (item.star_count === '' || item.star_count === null || item.star_count === undefined) return false;
     const s = Number(item.star_count);
     if (!Number.isFinite(s)) return false;
     return row.s0 === 0 ? s < 18 : s === row.s0;
   }
   if (row.kind === 'pot') {
     if (partOf(item.equip_type) !== row.part) return false;
-    if (!item.potential_grade || /Can't/i.test(item.potential_grade)) return false;
+    // 表のコストはレジェンダリー前提。未到達の装備は先にレジェ到達が必要なので対象外(注記で案内)
+    if (!/Legendary/i.test(item.potential_grade || '')) return false;
     const goal = goalSpec(row.goal);
     const from = fromSpec(row.from);
     if (!goal || !from) return false;
@@ -142,13 +145,14 @@ export function buildPlan(items, table, mainStat) {
   return plan;
 }
 
-// 対象外の理由(タブ下部の注記用)
+// 対象外の理由(タブ下部の注記用)。適用行が1つもない装備に呼ぶ
 export function excludeReason(item, table, mainStat) {
   const lv = nearestLv(item.req_level_base ?? item.req_level);
-  if (lv === null) return '装備Lv不明';
+  if (lv === null) return '装備Lv不明(再取り込みが必要)';
   const part = partOf(item.equip_type);
-  const hasStar = !item.no_starforce && Number.isFinite(Number(item.star_count));
-  const hasPotRows = part && table.some((r) => r.kind === 'pot' && r.part === part);
-  if (!hasStar && !hasPotRows) return `表に該当なし(${part ?? '部位不明'})`;
-  return null;
+  if (part && table.some((r) => r.kind === 'pot' && r.part === part) &&
+      !/Legendary/i.test(item.potential_grade || '')) {
+    return `潜在等級がレジェンダリー未達(${item.potential_grade || '不明'})`;
+  }
+  return '適用可能な行なし(目標達成済み or 表に該当Lv/部位の行なし)';
 }
