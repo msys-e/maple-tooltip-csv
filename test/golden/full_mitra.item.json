@@ -1,0 +1,16 @@
+{
+ "item_name": "Mitra's Rage: Warrior",
+ "star_count": 0,
+ "str_total": 40,
+ "dex_total": 40,
+ "max_hp_total": 700,
+ "attack_power_total": 5,
+ "magic_att_total": 5,
+ "potential_grade": "Legendary",
+ "pot1_text": "Attack Power +13%",
+ "pot1_grade": "Legendary",
+ "pot2_text": "Attack Power +10%",
+ "pot2_grade": "Unique",
+ "pot3_text": "Attack Power +10%",
+ "pot3_grade": "Unique"
+}

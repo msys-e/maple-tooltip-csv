@@ -11,7 +11,7 @@ import { GlyphBank, recognizeLines } from '../js/ocr.js';
 import { parseTooltip } from '../js/parse.js';
 import { itemToRow, COLUMNS } from '../js/csv.js';
 
-const SAMPLES = ['berserked', 'dawn_ring', 'genesis_sword'];
+const SAMPLES = ['berserked', 'dawn_ring', 'genesis_sword', 'full_daybreak', 'full_mitra'];
 const OUT = new URL('./out/', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1');
 const ROOT = new URL('../', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1');
 if (!existsSync(OUT)) mkdirSync(OUT, { recursive: true });
@@ -26,7 +26,9 @@ function crop(img, bbox) {
 }
 
 function loadSample(name) {
-  const img = decodePNG(`${ROOT}samples/${name}.png`);
+  const path = existsSync(`${ROOT}samples/${name}.png`)
+    ? `${ROOT}samples/${name}.png` : `${ROOT}test/fixtures/${name}.png`;
+  const img = decodePNG(path);
   let bbox = findTooltip(img);
   if (bbox.error) {
     console.log(`${name}: findTooltip -> ${bbox.error}`, bbox.bbox || '');

@@ -64,7 +64,8 @@ export class CaptureController {
       this.cb.onInfo(info);
       return;
     }
-    const hash = aHash(img, found);
+    // 矩形サイズも重複キーに含める(aHash衝突で別アイテムが握り潰されるのを軽減)
+    const hash = `${aHash(img, found)}:${found.w}x${found.h}`;
     if (hash === this.lastHash) this.stableN++;
     else this.stableN = 0;
     this.lastHash = hash;

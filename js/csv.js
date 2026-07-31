@@ -2,6 +2,7 @@
 const STAT_BASES = [
   'str', 'dex', 'int', 'luk', 'max_hp', 'max_mp',
   'attack_power', 'magic_att', 'defense',
+  'max_hp_pct', 'max_mp_pct',
   'all_stats_pct', 'boss_damage_pct', 'ignore_def_pct',
 ];
 

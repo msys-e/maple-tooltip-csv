@@ -1,0 +1,19 @@
+# golden: full_mitra (フルスクリーンfixture・星なし装備)
+Mitra's Rage: Warrior
+Untradable
+Currently Equipped
+Emblem / Power Source
+Emblem
+Required Job Warrior
+Required Level Lv. 200
+Set Effect§ Pitched Boss Set
+STR +40
+DEX +40
+Max HP +700
+Attack Power +5
+Magic ATT +5
+Star Force, Bonus Stats Can't Enhance
+§Potential : Legendary
+Attack Power +13%
+Attack Power +10%
+Attack Power +10%

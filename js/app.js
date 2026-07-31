@@ -197,14 +197,20 @@ function processTooltip(img, bbox, { silent = false } = {}) {
     if (!silent) toast(`重複スキップ: ${item.item_name}`, 'warn');
     return 'duplicate';
   }
-  itemKeys.add(key);
+  const newItems = [...items, item];
   try {
     item.thumb = canvas.toDataURL('image/png');
-    store.saveItems([...items, item]);
+    store.saveItems(newItems);
   } catch {
     delete item.thumb; // localStorage容量超過時はサムネイルなしで保存
-    store.saveItems([...items, item]);
+    try {
+      store.saveItems(newItems);
+    } catch {
+      toast('保存に失敗しました(localStorage容量を確認)', 'err');
+      return 'error'; // itemKeysに入れず、再ホバーでリトライ可能なままにする
+    }
   }
+  itemKeys.add(key);
   items.push(item);
   render();
   const tr = $('table-wrap').querySelector(`tr[data-idx="${items.length - 1}"]`);
