@@ -149,33 +149,45 @@ export function parseStatWindow(lines) {
   return { values, unknownLines };
 }
 
+// CHARACTER INFOウィンドウの「Lv. NNN」バッジ(数字部分だけを切り出したもの)。
+// レベルはSTATウィンドウには無いのでこちらから読む
+export function parseLevel(lines) {
+  const nums = lines.flatMap((ln) => numbersIn(textOf(ln)));
+  const v = nums[0];
+  // 1〜300以外は誤読とみなして捨てる(空欄のまま手入力してもらう)
+  if (!v || !Number.isInteger(v.value) || v.value < 1 || v.value > 300) return { values: {}, unknownLines: [] };
+  return { values: { level: v.value }, unknownLines: [] };
+}
+
 // ステータスのオンマウスで出るポップアップの [Applied Value] 部分。
-//   Base Value : 2546   → *Base
-//   % Value : 5%        → *Per / atkPercent
-// 固定加算(*Abs)に相当する行はこのUIには無いため触らない(手入力のまま)。
+//   Base Value : 6604            → *Base  (素)
+//   % Value : 518%               → *Per   (増加率)
+//   % Value Not Applied : 30700  → *Abs   (固定加算。%が乗らないぶん)
+// 3行目はステータスによって出ないことがある(実測: MAGIC ATT には無かった)。
 // target: 'mainStat' | 'subStat' | 'atk' — どのステータスにホバー中かは呼び出し側(UIのステップ)が決める
 export function parseStatPopup(lines, target) {
   const keys = {
-    mainStat: ['mainStatBase', 'mainStatPer'],
-    subStat: ['subStatBase', 'subStatPer'],
-    atk: ['atkBase', 'atkPercent'],
+    mainStat: ['mainStatBase', 'mainStatPer', 'mainStatAbs'],
+    subStat: ['subStatBase', 'subStatPer', 'subStatAbs'],
+    atk: ['atkBase', 'atkPercent', 'atkAbs'],
   }[target];
   if (!keys) return { values: {}, unknownLines: [] };
 
   const values = {};
   const unknownLines = [];
+  const put = (key, nums) => {
+    if (nums.length && values[key] === undefined) values[key] = nums[0].value;
+  };
   for (const ln of lines) {
     const text = textOf(ln);
     if (!text.trim()) continue;
     const nums = numbersIn(text);
-    // 「% Value」の判定を先に(「Base Value」より特徴的な行頭の%で見分ける)
-    if (/%\s*Value/i.test(text)) {
-      if (nums.length) values[keys[1]] = nums[0].value;
-    } else if (/Base\s*Va[lI]ue/i.test(text)) {
-      if (nums.length) values[keys[0]] = nums[0].value;
-    } else {
-      unknownLines.push(text);
-    }
+    // ★「% Value Not Applied」を先に判定する。これも /% Value/ に当たるため、
+    //   順序を逆にすると増加率(% Value)を固定加算の値で上書きしてしまう
+    if (/Not\s*App[lI]ied/i.test(text)) put(keys[2], nums);
+    else if (/%\s*Va[lI]ue/i.test(text)) put(keys[1], nums);
+    else if (/Base\s*Va[lI]ue/i.test(text)) put(keys[0], nums);
+    else if (!/^\s*\[/.test(text)) unknownLines.push(text); // [Base Value] 等の見出しは無視
   }
   return { values, unknownLines };
 }

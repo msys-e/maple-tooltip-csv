@@ -208,8 +208,15 @@ td.del:hover { opacity: 1; }
   color: var(--star); border-bottom: 1px solid var(--panel-edge);
   padding-bottom: 4px; margin-bottom: 8px;
 }
-.sc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 6px 12px; }
-.sc-field { display: flex; align-items: center; gap: 8px; }
+/* ラベルと入力欄を枠で囲む: 囲まないと入力欄が「右隣のラベル」とくっついて見える */
+.sc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 6px 16px; }
+.sc-field {
+  display: flex; align-items: center; gap: 8px;
+  background: rgba(0, 0, 0, .18);
+  border: 1px solid var(--panel-edge);
+  border-radius: 4px;
+  padding: 4px 6px 4px 10px;
+}
 .sc-label { flex: 1; font-size: 12px; color: var(--ink-dim); line-height: 1.4; }
 .sc-label em { color: var(--panel-edge); font-style: normal; }
 .sc-field input { width: 84px; font-family: var(--mono); text-align: right; }

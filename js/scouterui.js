@@ -1,7 +1,7 @@
 // スカウター連携タブのDOM層(app.js肥大回避のため分離)
 import { SCOUTER_FIELDS, GROUP_LABELS, SLOTS, buildDiff, buildBookmarklet } from './scouter.js';
-import { findStatWindow, findStatPopup } from './detectstat.js';
-import { parseStatWindow, parseStatPopup } from './parsestat.js';
+import { findStatWindow, findStatPopup, findLevelBadge } from './detectstat.js';
+import { parseStatWindow, parseStatPopup, parseLevel } from './parsestat.js';
 import * as store from './store.js';
 
 const $ = (id) => document.getElementById(id);
@@ -150,12 +150,30 @@ function fillForm(values) {
 
 // CaptureController から安定フレームごとに呼ばれる。
 // 戻り値 'lowq' は「処理済みにせず次フレームで再試行」の意(既存の装備取り込みと同じ約束)
+// レベルはSTATウィンドウではなく CHARACTER INFO の「Lv. NNN」バッジにあるので、
+// STATウィンドウを撮った同じフレームからついでに読む。
+// そのウィンドウが閉じていても取り込みは止めない(レベルだけ手入力のまま)
+function readLevel(img) {
+  try {
+    const bbox = findLevelBadge(img);
+    if (bbox.error) return {};
+    const { rec, canvas } = recognizeRegion(img, bbox);
+    const { values } = parseLevel(rec);
+    // 桁ごとにグリフが必要なので、未知の数字はラベラーに積んで次回から読めるようにする
+    if (!Object.keys(values).length && rec.some((l) => l.unknowns?.length)) reportUnknowns?.(rec, canvas);
+    return values;
+  } catch {
+    return {}; // レベルの取得失敗で取り込み全体を落とさない
+  }
+}
+
 function handleFrame(img, bbox) {
   const step = STEPS[stepIdx];
   if (!step) return 'error'; // 停止済みなのに委譲が残っている(異常)。処理済みにはしない
   try {
     const { rec, canvas } = recognizeRegion(img, bbox);
     const res = step.id === 'stat' ? parseStatWindow(rec) : parseStatPopup(rec, step.id);
+    if (step.id === 'stat') Object.assign(res.values, readLevel(img));
     const n = Object.keys(res.values).length;
     if (!n) {
       // 未知グリフだらけ = フォント差。ラベラーに積んで学習させる

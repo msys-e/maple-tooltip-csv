@@ -1,0 +1,2 @@
+# CHARACTER INFOの「Lv. NNN」バッジの数字部分(test/fixtures/level_badge.png)
+292

@@ -15,8 +15,8 @@ import { GlyphBank, recognizeLines } from '../js/ocr.js';
 import { parseTooltip } from '../js/parse.js';
 import { itemToRow, COLUMNS } from '../js/csv.js';
 import { buildDiff, applyDiff, buildBookmarklet, PRESET_KEY, SCOUTER_FIELDS } from '../js/scouter.js';
-import { parseStatWindow, parseStatPopup, STAT_LABELS, numbersIn } from '../js/parsestat.js';
-import { findStatWindow, findStatPopup } from '../js/detectstat.js';
+import { parseStatWindow, parseStatPopup, parseLevel, STAT_LABELS, numbersIn } from '../js/parsestat.js';
+import { findStatWindow, findStatPopup, findLevelBadge } from '../js/detectstat.js';
 
 const SAMPLES = [
   'berserked', 'dawn_ring', 'genesis_sword', 'full_daybreak', 'full_mitra',
@@ -28,6 +28,8 @@ const SAMPLES = [
 // STAT画面はラベルのフォントが装備ツールチップと別物なので、同じ label フローで
 // グリフを学習させる(数字は既存グリフと共通なので実際に増えるのは英大文字が中心)
 const STAT_SAMPLES = ['stat_window'];
+// レベルバッジはさらに別サイズのフォント。数字だけ学習させる
+const LEVEL_SAMPLES = ['level_badge'];
 const OUT = new URL('./out/', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1');
 const ROOT = new URL('../', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1');
 if (!existsSync(OUT)) mkdirSync(OUT, { recursive: true });
@@ -61,6 +63,16 @@ function loadStatSample(name) {
   const img = decodePNG(`${ROOT}test/fixtures/${name}.png`);
   const bbox = findStatWindow(img);
   if (bbox.error) throw new Error(`${name}: findStatWindow -> ${bbox.error}`);
+  const tip = crop(img, bbox);
+  const lines = segmentLines(tip);
+  return { img, bbox, tip, stars: 0, lines, linesAll: lines };
+}
+
+// レベルバッジ用のローダ(検出器だけが違う)
+function loadLevelSample(name) {
+  const img = decodePNG(`${ROOT}test/fixtures/${name}.png`);
+  const bbox = findLevelBadge(img);
+  if (bbox.error) throw new Error(`${name}: findLevelBadge -> ${bbox.error}`);
   const tip = crop(img, bbox);
   const lines = segmentLines(tip);
   return { img, bbox, tip, stars: 0, lines, linesAll: lines };
@@ -167,6 +179,7 @@ if (cmd === 'label') {
   const samples = [
     ...SAMPLES.map((name) => ({ name, lines: loadSample(name).lines, golden: goldenLines(name) })),
     ...STAT_SAMPLES.map((name) => ({ name, lines: loadStatSample(name).lines, golden: goldenLines(name) })),
+    ...LEVEL_SAMPLES.map((name) => ({ name, lines: loadLevelSample(name).lines, golden: goldenLines(name) })),
   ];
   const conflicts = [];
   let round = 0, added = 1;
@@ -306,6 +319,13 @@ if (cmd === 'statocr') {
     if (bbox.error) { fail++; console.log(`\n== ${name}\n NG findStatPopup -> ${bbox.error}`); }
     else check(name, parseStatPopup(recognizeLines(segmentLines(crop(img, bbox)), bank), 'atk'));
   }
+  {
+    const name = 'level_badge';
+    const img = decodePNG(`${ROOT}test/fixtures/${name}.png`);
+    const bbox = findLevelBadge(img);
+    if (bbox.error) { fail++; console.log(`\n== ${name}\n NG findLevelBadge -> ${bbox.error}`); }
+    else check(name, parseLevel(recognizeLines(segmentLines(crop(img, bbox)), bank)));
+  }
 
   console.log(`\nstatocr: pass=${pass} fail=${fail}`);
   process.exitCode = fail ? 1 : 0;
@@ -334,14 +354,21 @@ if (cmd === 'statdetect') {
   }
 
   const pop = load('stat_popup_matt');
-  eq(findStatPopup(pop), { x: 426, y: 459, w: 180, h: 38 }, 'ポップアップ [Applied Value] 直後2行の矩形');
+  eq(findStatPopup(pop), { x: 426, y: 459, w: 180, h: 48 }, 'ポップアップ [Applied Value] 直後3行ぶんの矩形');
   const popLines = segmentLines(crop(pop, findStatPopup(pop)));
-  eq(popLines.length, 2, 'ポップアップは2行(Base Value / % Value)');
+  eq(popLines.length, 2, 'MAGIC ATTのポップアップは2行(3行目が無い。見出し[Base Value]も巻き込まない)');
+
+  const lv = load('level_badge');
+  eq(findLevelBadge(lv), { x: 290, y: 41, w: 40, h: 26 }, 'レベルバッジ(CHARACTER INFOタイトル基準)の矩形');
+  eq(segmentLines(crop(lv, findLevelBadge(lv))).length, 1, 'レベルは1行');
+  eq(findLevelBadge(load('stat_window')), { error: 'not_found' },
+    'CHARACTER INFOが写っていなければ not_found(取り込みは止めない)');
 
   // 誤検出しないこと: 装備ツールチップのサンプルにはどちらのアンカーも無い
   const tip = decodePNG(`${ROOT}samples/berserked.png`);
   eq(findStatWindow(tip), { error: 'not_found' }, '装備ツールチップをSTATウィンドウと誤検出しない');
   eq(findStatPopup(tip), { error: 'not_found' }, '装備ツールチップをポップアップと誤検出しない');
+  eq(findLevelBadge(tip), { error: 'not_found' }, '装備ツールチップをレベルバッジと誤検出しない');
 
   console.log(`\nstatdetect: pass=${pass} fail=${fail}`);
   process.exitCode = fail ? 1 : 0;
@@ -423,16 +450,29 @@ if (cmd === 'parsestat') {
     statusAdditionalDmg: 23, summonPersistTime: 10, arcaneForce: 1360, authenticForce: 760,
   }, 'STATウィンドウ全11行 → 15キー');
 
+  // --- レベルバッジ ---
+  eq(parseLevel(['292']).values, { level: 292 }, 'レベル');
+  eq(parseLevel([{ text: '1' }]).values, { level: 1 }, '1桁');
+  eq(parseLevel(['301']).values, {}, '301以上は誤読とみなして捨てる');
+  eq(parseLevel(['0']).values, {}, '0は捨てる');
+  eq(parseLevel(['29.2']).values, {}, '小数は捨てる');
+  eq(parseLevel(['']).values, {}, '空でも落ちない');
+
   // --- ポップアップ([Applied Value] の2行。test/fixtures/stat_popup_matt.png の見たまま) ---
   eq(parseStatPopup(['Base Value : 2546', '% Value : 5%'], 'atk').values,
-    { atkBase: 2546, atkPercent: 5 }, '攻撃力: Base Value と % Value');
-  eq(parseStatPopup(['Base Value : 12345', '% Value : 320%'], 'mainStat').values,
-    { mainStatBase: 12345, mainStatPer: 320 }, 'メインステ');
+    { atkBase: 2546, atkPercent: 5 }, '攻撃力: Base Value と % Value(3行目が無いケース)');
+  // 実画面(STRのポップアップ): 3行目の「% Value Not Applied」が固定加算
+  eq(parseStatPopup(['Base Value : 6604', '% Value : 518%', '% Value Not Applied : 30700'], 'mainStat').values,
+    { mainStatBase: 6604, mainStatPer: 518, mainStatAbs: 30700 },
+    'メインステ: 素/増加率/固定加算の3値');
+  eq(parseStatPopup(['Base Value : 6604', '% Value Not Applied : 30700', '% Value : 518%'], 'mainStat').values,
+    { mainStatBase: 6604, mainStatAbs: 30700, mainStatPer: 518 },
+    '行順が入れ替わっても増加率が固定加算で上書きされない');
   eq(parseStatPopup(['Base Value : 999', '% Value : 0%'], 'subStat').values,
     { subStatBase: 999, subStatPer: 0 }, 'サブステ(0%でもキーを作る)');
   eq(parseStatPopup(['Base Value : 2546'], 'atk').values, { atkBase: 2546 }, '%行が無くても落ちない');
   eq(parseStatPopup(['Base Value : 2546', '% Value : 5%'], 'unknown').values, {}, '対象不明なら何も返さない');
-  eq(parseStatPopup(['なにか'], 'atk').unknownLines, ['なにか'], '想定外の行は報告する');
+  eq(parseStatPopup(['[Base Value]', 'なにか'], 'atk').unknownLines, ['なにか'], '見出し行は無視し、想定外の行だけ報告する');
 
   console.log(`\nparsestat: pass=${pass} fail=${fail}`);
   process.exitCode = fail ? 1 : 0;
