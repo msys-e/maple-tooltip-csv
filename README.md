@@ -59,6 +59,7 @@ node test/run.mjs seg        # 行/グリフ分割の確認
 node test/run.mjs label      # golden整列で辞書を再構築
 node test/run.mjs ocr        # OCR全行一致テスト
 node test/run.mjs parse      # パース結果のgolden比較
+node test/run.mjs tooltip    # ツールチップのヘッダ解釈(画像不要)
 node test/flame.test.mjs     # 転生スコア・確率分布テスト
 ```
 

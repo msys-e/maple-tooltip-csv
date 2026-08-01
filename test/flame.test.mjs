@@ -147,6 +147,15 @@ for (const item of [
   assert.equal(flameEligibility(item).kind, 'excluded', `${item.item_name} should remain excluded`);
 }
 assert.equal(flameEligibility({ equip_type: 'Weapon One-handed / Sword', req_level: 200 }).kind, 'weapon');
+// 旧パーサでヘッダのジャンクごと保存されたequip_typeも、末尾チップで正しく判定する
+assert.deepEqual(
+  flameEligibility({ equip_type: ".' , / .. Currently Equipped / - / Pocket ltem", req_level_base: 160 }),
+  { kind: 'non_weapon', itemLevel: 160 },
+);
+assert.equal(
+  flameEligibility({ equip_type: 'Currently Equipped / Accessory / Ring', req_level: 160 }).kind, 'excluded');
+assert.equal(
+  flameEligibility({ equip_type: '.. Currently Equipped / Weapon One-handed / Sword', req_level: 200 }).kind, 'weapon');
 assert.equal(flameEligibility({ equip_type: 'Armor / Hat', req_level: '' }).kind, 'excluded');
 assert.equal(flameEligibility({ equip_type: 'Armor / Hat', req_level: -1 }).kind, 'excluded');
 assert.equal(flameEligibility({ equip_type: 'Armor / Hat', req_level: 160.5 }).kind, 'excluded');

@@ -5,6 +5,7 @@
 //   node test/run.mjs parse          パース結果を golden CSV(json) と比較
 //   node test/run.mjs scouter        maplescouter連携(差分生成・ブックマークレット)の単体テスト
 //   node test/run.mjs parsestat      STAT画面のラベル→キー変換の単体テスト(画像不要)
+//   node test/run.mjs tooltip        装備ツールチップのヘッダ解釈の単体テスト(画像不要)
 //   node test/run.mjs statdetect     STAT画面/ポップアップの矩形検出と行分割の回帰
 //   node test/run.mjs statocr        STAT画面 検出→分割→OCR→パース の通し回帰
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
@@ -482,6 +483,45 @@ if (cmd === 'parsestat') {
     'ラベルが全滅しても行順で割り当てる');
 
   console.log(`\nparsestat: pass=${pass} fail=${fail}`);
+  process.exitCode = fail ? 1 : 0;
+}
+
+if (cmd === 'tooltip') {
+  let pass = 0, fail = 0;
+  const ok = (cond, msg) => { if (cond) { pass++; } else { fail++; console.log(` NG ${msg}`); } };
+  const eq = (got, want, msg) => ok(
+    JSON.stringify(got) === JSON.stringify(want),
+    `${msg}\n   got : ${JSON.stringify(got)}\n   want: ${JSON.stringify(want)}`,
+  );
+  // OCR済みテキスト行だけを与えてヘッダ解釈を見る(検出・分割・辞書は経由しない)
+  const tip = (texts) => parseTooltip(
+    texts.map((text, i) => ({ text, chars: [], bullet: null, unknowns: [], isStars: false, y0: i * 20, y1: i * 20 + 16 })),
+    0,
+  );
+
+  // --- 装備中ツールチップ: カーソルや"Combat Power Increase"が種別チップに混ざらない ---
+  // 実例: Cursed Red Spellbook。マウスカーソルが "Currently Equipped" 行の先頭に写り込む。
+  const equipped = tip([
+    'Cursed Red Spellbook', 'Untradable', ".' ,", 'Combat Power lncrease',
+    '.. Currently Equipped', '-', 'Pocket ltem',
+    'Required Job  Shared', 'Required Level Lv. 140 (160 - 20)',
+  ]);
+  eq(equipped.item_name, 'Cursed Red Spellbook', '行頭ノイズがあっても名前は名前行から取る');
+  eq(equipped.equip_type, 'Pocket ltem', '種別は装備部位チップだけ(カーソル・掠れ行を含めない)');
+  eq(equipped.req_level, 140, 'Lv低下後の表示値');
+  eq(equipped.req_level_base, 160, 'Lv低下前の基準値(転生判定のILに使う)');
+
+  // 行頭が綺麗に読めた場合も同じ結果になる(アンカーを外した副作用が無いこと)
+  eq(tip([
+    'Daybreak Pendant', 'Currently Equipped', 'Accessory', 'Pendant', 'Required Level Lv. 140',
+  ]).equip_type, 'Accessory / Pendant', '複数チップは従来どおり連結する');
+
+  // 未装備(Currently Equipped が無い)ツールチップは名前の次から拾う
+  eq(tip([
+    'Arcane Umbra Cape', 'Untradable', 'Cape', 'Required Level Lv. 200',
+  ]).equip_type, 'Cape', '未装備でもチップを取れる');
+
+  console.log(`\ntooltip: pass=${pass} fail=${fail}`);
   process.exitCode = fail ? 1 : 0;
 }
 

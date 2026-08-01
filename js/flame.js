@@ -138,8 +138,11 @@ export function flameEligibility(item) {
   if (item?.no_bonus_stats) return { kind: 'excluded', reason: '転生対象外' };
   const equipType = String(item?.equip_type || '');
   if (isWeaponType(equipType)) return { kind: 'weapon', reason: '武器は別判定' };
-  if (EXCLUDED_TYPE.test(equipType)) return { kind: 'excluded', reason: '転生対象外の部位' };
-  if (!ELIGIBLE_NON_WEAPON_TYPE.test(equipType)) return { kind: 'excluded', reason: '部位を判定できません' };
+  // equip_typeはOCRのジャンク行が前に連結されることがある(例: "Currently Equipped / - / Pocket Item")。
+  // 部位は必ず最後のチップなので、そこだけを見て誤判定を防ぐ。
+  const part = equipType.split('/').pop().trim();
+  if (EXCLUDED_TYPE.test(part)) return { kind: 'excluded', reason: '転生対象外の部位' };
+  if (!ELIGIBLE_NON_WEAPON_TYPE.test(part)) return { kind: 'excluded', reason: '部位を判定できません' };
   const rawItemLevel = item.req_level_base ?? item.req_level;
   const itemLevel = typeof rawItemLevel === 'string' && rawItemLevel.trim() === ''
     ? NaN : Number(rawItemLevel);

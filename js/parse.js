@@ -76,8 +76,10 @@ export function parseTooltip(lines, starCount) {
   const textLines = lines.filter((l) => !l.isStars && l.text.trim().length > 0);
   // アイテム名 = 定型キーワード行(Untradable/Currently Equipped/Required Job)の直前の行。
   // 検出上端が行き過ぎてツールチップ外のジャンク行が先頭に混ざっても名前を取り違えない
-  const kw = /^(Untradable|Currently\s*Equ|Required\s*(Job|Level)|Special\s*[Il]tem)/i; // OCRはIをlと読む
-  const kwIdx = textLines.findIndex((l) => kw.test(l.text.trim()));
+  const kw = /^(Untradable|Required\s*(Job|Level)|Special\s*[Il]tem)/i; // OCRはIをlと読む
+  // "Currently Equipped"はマウスカーソル等が行頭に写り込んで先頭に別グリフが付くため行頭固定にしない
+  const isEquipped = (l) => /Currently\s*Equ/i.test(l.text);
+  const kwIdx = textLines.findIndex((l) => kw.test(l.text.trim()) || isEquipped(l));
   const nameLine = kwIdx > 0 ? textLines[kwIdx - 1] : (kwIdx === -1 && textLines.length ? textLines[0] : null);
   item._name_y = nameLine ? nameLine.y0 : -1; // 内部用: 名前行より上=ジャンク領域の境界
   if (nameLine) {
@@ -91,7 +93,7 @@ export function parseTooltip(lines, starCount) {
   // チップ行(Accessory/Pendant、Weapon One-handed/Sword 等、1〜3行)を連結する
   {
     const foldT = (s) => s.replace(/I/g, 'l');
-    const curIdx = textLines.findIndex((l) => /^Currently\s*Equ/i.test(l.text.trim()));
+    const curIdx = textLines.findIndex(isEquipped);
     const reqIdx = textLines.findIndex((l) => /^Required\s*(Job|Level)/i.test(foldT(l.text.trim())));
     // 名前行不明時は抽出しない(先頭ジャンクを種別に取り込まないため)
     const nameIdx = nameLine ? textLines.indexOf(nameLine) : -1;
@@ -100,7 +102,9 @@ export function parseTooltip(lines, starCount) {
       const chips = [];
       for (let i = from; i < reqIdx; i++) {
         const t = textLines[i].text.trim();
-        if (/^(Untradable|Special\s*[Il]tem|Duration)/i.test(t)) continue;
+        if (/^(Untradable|Special\s*[Il]tem|Duration|Combat\s*Power)/i.test(t)) continue;
+        // 枠線・カーソルだけを拾った行はチップではない(実チップはHat/Cape/Pocket Item等いずれも英数3文字以上)
+        if (t.replace(/[^A-Za-z0-9]/g, '').length < 3) continue;
         chips.push(t);
         consumed.add(textLines[i]);
       }
