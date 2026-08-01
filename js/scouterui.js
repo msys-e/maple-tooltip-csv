@@ -126,8 +126,10 @@ function nextStep() {
 function stopOcr({ quiet = false } = {}) {
   if (stepIdx < 0) return;
   stepIdx = -1;
-  cap.setDetector(null); // 装備ツールチップ検出に戻す
-  cap.onFrame(null);
+  // ★フレームの委譲を最優先で外す。ここで例外が出て委譲が残ると、
+  //   装備タブに戻っても全フレームがこちらへ流れ続けて取り込みが死ぬ
+  try { cap.onFrame(null); } catch { /* 注入側の不整合は握りつぶす */ }
+  try { cap.setDetector(null); } catch { /* 装備ツールチップ検出への復帰に失敗しても停止は続行 */ }
   renderSteps();
   if (!quiet) toast('読み取りを終了しました', 'warn');
 }
@@ -150,23 +152,39 @@ function fillForm(values) {
 // 戻り値 'lowq' は「処理済みにせず次フレームで再試行」の意(既存の装備取り込みと同じ約束)
 function handleFrame(img, bbox) {
   const step = STEPS[stepIdx];
-  const { rec, canvas } = recognizeRegion(img, bbox);
-  const res = step.id === 'stat' ? parseStatWindow(rec) : parseStatPopup(rec, step.id);
-  const n = Object.keys(res.values).length;
-  if (!n) {
-    // 未知グリフだらけ = フォント差。ラベラーに積んで学習させる
-    if (rec.some((l) => l.unknowns?.length)) reportUnknowns?.(rec, canvas);
-    return 'lowq';
+  if (!step) return 'error'; // 停止済みなのに委譲が残っている(異常)。処理済みにはしない
+  try {
+    const { rec, canvas } = recognizeRegion(img, bbox);
+    const res = step.id === 'stat' ? parseStatWindow(rec) : parseStatPopup(rec, step.id);
+    const n = Object.keys(res.values).length;
+    if (!n) {
+      // 未知グリフだらけ = フォント差。ラベラーに積んで学習させる
+      if (rec.some((l) => l.unknowns?.length)) reportUnknowns?.(rec, canvas);
+      return 'lowq';
+    }
+    const filled = fillForm(res.values);
+    chime('success');
+    toast(`${step.name}: ${filled}項目を読み取りました`);
+    nextStep();
+    return 'ok';
+  } catch (e) {
+    // 毎フレーム呼ばれる経路なので、例外を投げっぱなしにすると
+    // エラーを撒き続けたうえ装備タブの取り込みまで巻き込んで壊す
+    console.error('[mtc] STAT取り込みでエラー', e);
+    stopOcr({ quiet: true });
+    toast('読み取り中にエラーが発生したため停止しました', 'err');
+    return 'error';
   }
-  const filled = fillForm(res.values);
-  chime('success');
-  toast(`${step.name}: ${filled}項目を読み取りました`);
-  nextStep();
-  return 'ok';
 }
 
 async function startOcr() {
   if (!cap || !recognizeRegion) { toast('この環境では画面共有が使えません', 'err'); return; }
+  // 古いキャッシュのJSが混ざると setDetector が無い状態で動き出し、
+  // 途中で例外 → 委譲が外れず装備タブまで壊れる。事前に弾く
+  if (!cap.supported) {
+    toast('ページを再読み込みしてください(Ctrl+Shift+R)。古いスクリプトが読み込まれています', 'err');
+    return;
+  }
   if (!cap.running()) {
     try {
       await cap.start();

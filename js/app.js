@@ -725,6 +725,8 @@ function installLearnHook() {
     recognizeRegion,
     reportUnknowns,
     capture: {
+      // 古いキャッシュのcapture.jsが読まれていると setDetector が生えていない
+      supported: typeof capture.setDetector === 'function',
       running: () => capture.running,
       start: () => capture.start(),
       setDetector: (fn, opts) => capture.setDetector(fn, opts),
