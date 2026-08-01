@@ -189,7 +189,20 @@ td.del:hover { opacity: 1; }
 .sc-dim { color: var(--ink-dim); font-size: 12px; }
 .sc-intro a, .sc-steps a { color: var(--cyan); }
 
+.sc-ocr {
+  background: var(--bg2); border: 1px solid var(--panel-edge); border-radius: 6px;
+  padding: 10px 12px; margin-bottom: 14px;
+}
+.sc-ocrhead { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.sc-ocrsteps { margin: 10px 0 0 22px; line-height: 1.9; }
+.sc-ocrsteps li { color: var(--ink-dim); font-size: 12.5px; }
+.sc-ocrsteps li.current { color: var(--star); font-weight: 700; }
+.sc-ocrsteps li.current::marker { content: '▶ '; }
+.sc-ocrsteps li.done { color: var(--cyan); text-decoration: line-through; opacity: .75; }
+#scouter-ocr-status { font-family: var(--mono); }
+
 .sc-group { margin-bottom: 14px; }
+.sc-field input.filled { border-color: var(--cyan); color: var(--cyan); }
 .sc-group h3 {
   font-family: 'DotGothic16', monospace; font-size: 13px; letter-spacing: 1px;
   color: var(--star); border-bottom: 1px solid var(--panel-edge);

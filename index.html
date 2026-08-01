@@ -92,6 +92,24 @@
     <span class="sc-dim">空欄の項目は送信されません（向こうで設定済みの職業などはそのまま残ります）。</span>
   </p>
 
+  <div class="sc-ocr">
+    <div class="sc-ocrhead">
+      <button id="btn-scouter-ocr" class="primary">画面共有からOCRで読み取り</button>
+      <span id="scouter-ocr-status" class="sc-dim">停止中</span>
+      <button id="btn-scouter-skip" style="display:none">この項目をスキップ</button>
+      <button id="btn-scouter-stop" class="danger" style="display:none">読み取りをやめる</button>
+    </div>
+    <ol id="scouter-steps" class="sc-ocrsteps" style="display:none">
+      <li data-step="stat">ゲーム内で <b>STATウィンドウ</b> を開く</li>
+      <li data-step="mainStat"><b>メインステータス</b>(STR/DEX/INT/LUK のうち主ステ)にマウスを乗せる</li>
+      <li data-step="subStat"><b>サブステータス</b>にマウスを乗せる</li>
+      <li data-step="atk"><b>攻撃力</b>(魔法職は魔力)にマウスを乗せる</li>
+    </ol>
+    <p class="sc-dim" id="scouter-ocr-hint" style="display:none">
+      各ステップは読み取れた時点で自動的に次へ進みます。読めない項目は「スキップ」して手入力してください。
+    </p>
+  </div>
+
   <div id="scouter-form"></div>
 
   <div class="sc-actions">

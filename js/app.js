@@ -505,8 +505,26 @@ const capture = new CaptureController({
     if (info.res) $('info-res').textContent = info.res;
     if (info.tip) $('info-tip').textContent = info.tip;
   },
-  onTooltip: (img, bbox) => processTooltip(img, bbox),
+  // スカウタータブがSTAT画面を取り込んでいる間だけ、フレームの処理をそちらへ委譲する
+  onTooltip: (img, bbox) => (statHandler ? statHandler(img, bbox) : processTooltip(img, bbox)),
 });
+let statHandler = null;
+
+// スカウタータブ用: 任意の矩形を本番と同じ経路(crop→分割→認識)で読む
+function recognizeRegion(img, bbox) {
+  const { canvas, sub } = cropToCanvas(img, bbox);
+  return { rec: recognizeLines(segmentLines(sub), bank), canvas };
+}
+
+// 未知グリフをラベラーへ積む(STAT画面はフォントが違うので初回は必ず出る)
+function reportUnknowns(rec, canvas) {
+  let n = 0;
+  for (const ln of rec) for (const g of ln.unknowns || []) { labeler.add(g, lineCanvas(canvas, ln)); n++; }
+  if (!n) return;
+  $('unknown-count').textContent = labeler.count;
+  $('unknown-banner').classList.add('show');
+  toast(`未知の文字 ${labeler.count} 件 — ラベル付けすると読み取れるようになります`, 'warn');
+}
 
 $('btn-capture').addEventListener('click', async () => {
   if (capture.running) { capture.stop(); return; }
@@ -700,5 +718,17 @@ function installLearnHook() {
   renderColPanel();
   render();
   refreshSnapshots();
-  initScouterUI({ toast, copyText });
+  initScouterUI({
+    toast,
+    copyText,
+    chime,
+    recognizeRegion,
+    reportUnknowns,
+    capture: {
+      running: () => capture.running,
+      start: () => capture.start(),
+      setDetector: (fn, opts) => capture.setDetector(fn, opts),
+      onFrame: (fn) => { statHandler = fn; },
+    },
+  });
 })();
