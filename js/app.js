@@ -434,12 +434,14 @@ function processTooltip(img, bbox, { silent = false } = {}) {
   }
   const newItems = [...items, item];
   try {
-    item.thumb = canvas.toDataURL('image/png');
+    // PNGだと1枚250KB前後で20件程度でlocalStorage上限(5MiB)に達するためJPEGで保存
+    item.thumb = canvas.toDataURL('image/jpeg', 0.82);
     store.saveItems(newItems);
   } catch {
     delete item.thumb; // localStorage容量超過時はサムネイルなしで保存
     try {
       store.saveItems(newItems);
+      if (!silent) toast('容量不足のためサムネイルなしで保存しました', 'warn');
     } catch {
       if (!silent) toast('保存に失敗しました(localStorage容量を確認)', 'err');
       return 'error'; // itemKeysに入れず、再ホバーでリトライ可能なままにする
@@ -701,6 +703,35 @@ function installLearnHook() {
   };
 }
 
+// 旧形式(PNG)のサムネイルをJPEGへ変換して容量を約1/10に圧縮する。
+// PNGのままだと20件強で5MiB上限に達し、以降の装備がサムネイルなしになる
+async function migrateThumbs() {
+  const migrating = items;
+  const targets = items.filter((it) => it.thumb?.startsWith('data:image/png'));
+  if (!targets.length) return;
+  let done = 0;
+  for (const it of targets) {
+    try {
+      const im = new Image();
+      const ok = await new Promise((res) => { im.onload = () => res(true); im.onerror = () => res(false); im.src = it.thumb; });
+      if (!ok) continue;
+      const c = document.createElement('canvas');
+      c.width = im.naturalWidth;
+      c.height = im.naturalHeight;
+      c.getContext('2d').drawImage(im, 0, 0);
+      it.thumb = c.toDataURL('image/jpeg', 0.82);
+      done++;
+    } catch { /* 個別の変換失敗はスキップして残りを続行 */ }
+  }
+  // await中にインポート/クリア等でitemsが差し替わっていたら旧配列への変換は捨てる(次回起動で再移行)
+  if (items !== migrating || !done) return;
+  try {
+    store.saveItems(items);
+    render();
+    toast(`サムネイル${done}件を圧縮形式に変換しました`);
+  } catch { /* 保存失敗時はlocalStorage上PNGのまま(次回起動で再移行) */ }
+}
+
 (async () => {
   try {
     const res = await fetch(`data/glyphbank.json?v=${Date.now()}`); // 古いキャッシュ対策
@@ -733,4 +764,5 @@ function installLearnHook() {
       onFrame: (fn) => { statHandler = fn; },
     },
   });
+  migrateThumbs();
 })();
