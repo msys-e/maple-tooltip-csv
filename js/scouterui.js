@@ -252,6 +252,15 @@ export function initScouterUI(deps = {}) {
     toast('入力をクリアしました', 'warn');
   });
 
+  // ドラッグ内容を明示する。既定でも <a href> から入るが、
+  // 環境によって取りこぼすことがあるので念のため両方の型で渡す
+  $('scouter-link').addEventListener('dragstart', (e) => {
+    const href = $('scouter-link').getAttribute('href');
+    if (!href || href === '#' || !e.dataTransfer) return;
+    e.dataTransfer.setData('text/uri-list', href);
+    e.dataTransfer.setData('text/plain', href);
+  });
+
   // ページ上でクリックしても意味がない(このサイトのlocalStorageを触ってしまう)ので必ず止める
   $('scouter-link').addEventListener('click', (e) => {
     e.preventDefault();

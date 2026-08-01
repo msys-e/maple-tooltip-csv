@@ -150,11 +150,20 @@ export function installDropPaste(onImage) {
       if (it.type.startsWith('image/')) onImage(await imageFromBlob(it.getAsFile()));
     }
   });
+  // 受け付けるのはファイル(スクリーンショット)のドラッグだけ。
+  // 何でも preventDefault すると、ページ内のリンク(スカウター連携のブックマークレット)を
+  // ブックマークバーへドラッグしようとしたときにページ側がドロップ先を横取りしてしまう
+  const hasFiles = (e) => Array.from(e.dataTransfer?.types || []).includes('Files');
   let depth = 0;
-  window.addEventListener('dragenter', (e) => { e.preventDefault(); if (++depth) document.body.classList.add('dragging'); });
+  window.addEventListener('dragenter', (e) => {
+    if (!hasFiles(e)) return;
+    e.preventDefault();
+    if (++depth) document.body.classList.add('dragging');
+  });
   window.addEventListener('dragleave', () => { if (--depth <= 0) { depth = 0; document.body.classList.remove('dragging'); } });
-  window.addEventListener('dragover', (e) => e.preventDefault());
+  window.addEventListener('dragover', (e) => { if (hasFiles(e)) e.preventDefault(); });
   window.addEventListener('drop', async (e) => {
+    if (!hasFiles(e)) return;
     e.preventDefault();
     depth = 0;
     document.body.classList.remove('dragging');
