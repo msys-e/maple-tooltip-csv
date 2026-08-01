@@ -6,6 +6,7 @@
 //   node test/run.mjs scouter        maplescouter連携(差分生成・ブックマークレット)の単体テスト
 //   node test/run.mjs parsestat      STAT画面のラベル→キー変換の単体テスト(画像不要)
 //   node test/run.mjs statdetect     STAT画面/ポップアップの矩形検出と行分割の回帰
+//   node test/run.mjs statocr        STAT画面 検出→分割→OCR→パース の通し回帰
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { decodePNG, writeBMP } from './png.mjs';
 import { findTooltip, countStars } from '../js/detect.js';
@@ -24,6 +25,9 @@ const SAMPLES = [
   'eternal_helm', 'eternal_armor', 'eternal_pants', 'arcane_shoulder', 'arcane_cape',
   'arcane_gloves', 'arcane_shoes', 'arcane_shoes_b', 'black_heart', 'live_eternal_helm', 'live_princess_gem',
 ];
+// STAT画面はラベルのフォントが装備ツールチップと別物なので、同じ label フローで
+// グリフを学習させる(数字は既存グリフと共通なので実際に増えるのは英大文字が中心)
+const STAT_SAMPLES = ['stat_window'];
 const OUT = new URL('./out/', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1');
 const ROOT = new URL('../', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1');
 if (!existsSync(OUT)) mkdirSync(OUT, { recursive: true });
@@ -50,6 +54,16 @@ function loadSample(name) {
   const linesAll = segmentLines(tip);
   // label/ocr のgolden整列は星列を除いたテキスト行に対して行う
   return { img, bbox, tip, stars: countStars(img, bbox), lines: linesAll.filter((l) => !l.isStars), linesAll };
+}
+
+// STATウィンドウ用のローダ(検出器だけが違う。星は無いので isStars 判定も不要)
+function loadStatSample(name) {
+  const img = decodePNG(`${ROOT}test/fixtures/${name}.png`);
+  const bbox = findStatWindow(img);
+  if (bbox.error) throw new Error(`${name}: findStatWindow -> ${bbox.error}`);
+  const tip = crop(img, bbox);
+  const lines = segmentLines(tip);
+  return { img, bbox, tip, stars: 0, lines, linesAll: lines };
 }
 
 function drawOverlay(name, tip, lines) {
@@ -150,7 +164,10 @@ function alignLine(glyphs, chars, bank) {
 
 if (cmd === 'label') {
   const bank = new GlyphBank(null);
-  const samples = SAMPLES.map((name) => ({ name, lines: loadSample(name).lines, golden: goldenLines(name) }));
+  const samples = [
+    ...SAMPLES.map((name) => ({ name, lines: loadSample(name).lines, golden: goldenLines(name) })),
+    ...STAT_SAMPLES.map((name) => ({ name, lines: loadStatSample(name).lines, golden: goldenLines(name) })),
+  ];
   const conflicts = [];
   let round = 0, added = 1;
   const lineState = new Map(); // "name:idx" -> done
@@ -257,6 +274,41 @@ if (cmd === 'dump') {
   }
   writeBMP(`${OUT}${name}_L${lineNo}.bmp`, big);
   console.log(`wrote ${OUT}${name}_L${lineNo}.bmp`);
+}
+
+if (cmd === 'statocr') {
+  const bank = new GlyphBank(JSON.parse(readFileSync(`${ROOT}data/glyphbank.json`, 'utf-8')));
+  let pass = 0, fail = 0;
+  // 本番と同じ経路: 検出 → crop → segment → recognize → parse
+  const check = (name, got) => {
+    const gp = `${ROOT}test/golden/${name}.stat.json`;
+    const want = JSON.parse(readFileSync(gp, 'utf-8'));
+    console.log(`\n== ${name}`);
+    let bad = 0;
+    for (const [k, v] of Object.entries(want)) {
+      if (got.values[k] !== v) { bad++; console.log(` NG ${k}: got=${JSON.stringify(got.values[k])} want=${v}`); }
+    }
+    for (const k of Object.keys(got.values)) {
+      if (!(k in want)) { bad++; console.log(` NG 余分なキー ${k}=${got.values[k]}`); }
+    }
+    for (const l of got.unknownLines) { bad++; console.log(` NG 未知行 ${JSON.stringify(l)}`); }
+    if (bad) fail++; else { pass++; console.log(` ${Object.keys(want).length} 項目すべてOK`); }
+  };
+
+  for (const name of ['stat_window', 'stat_window_b']) {
+    const { lines } = loadStatSample(name);
+    check(name, parseStatWindow(recognizeLines(lines, bank)));
+  }
+  {
+    const name = 'stat_popup_matt';
+    const img = decodePNG(`${ROOT}test/fixtures/${name}.png`);
+    const bbox = findStatPopup(img);
+    if (bbox.error) { fail++; console.log(`\n== ${name}\n NG findStatPopup -> ${bbox.error}`); }
+    else check(name, parseStatPopup(recognizeLines(segmentLines(crop(img, bbox)), bank), 'atk'));
+  }
+
+  console.log(`\nstatocr: pass=${pass} fail=${fail}`);
+  process.exitCode = fail ? 1 : 0;
 }
 
 if (cmd === 'statdetect') {

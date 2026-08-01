@@ -1,0 +1,17 @@
+{
+ "dmg": 71,
+ "bossDmg": 482,
+ "ignoreDef": 96.85,
+ "normalDmg": 12,
+ "critical": 90,
+ "criticalDmg": 113.65,
+ "coolTimeReduce": 4,
+ "coolTimeReducePercent": 5,
+ "buffDuration": 30,
+ "resetCoolDown": 7.5,
+ "ignoreElementalResist": 5,
+ "statusAdditionalDmg": 23,
+ "summonPersistTime": 10,
+ "arcaneForce": 1360,
+ "authenticForce": 760
+}

@@ -43,9 +43,12 @@ export function norm(s) {
 }
 
 // 行から数値を拾う。'1,234' '12.5%' '-3' に対応。pct=true は%付き
+// OCRは字間を空白として出すことがある('1 ,360' / '71 .00%')ので、数字の並びに
+// 割り込んだ空白は先に詰める(そうしないと 1,360 が 1 と 360 に割れる)
 export function numbersIn(text) {
   const out = [];
-  for (const m of String(text).matchAll(/(-?[\d,]+(?:\.\d+)?)\s*(%?)/g)) {
+  const s = String(text).replace(/(\d)\s+(?=[\d,.])/g, '$1').replace(/([,.])\s+(?=\d)/g, '$1');
+  for (const m of s.matchAll(/(-?[\d,]+(?:\.\d+)?)\s*(%?)/g)) {
     const raw = m[1].replace(/,/g, '');
     if (raw === '' || raw === '-') continue;
     const v = Number(raw);
@@ -54,22 +57,43 @@ export function numbersIn(text) {
   return out;
 }
 
-const ALL_LABELS = [
-  ...STAT_LABELS.map((e) => e.label),
-  COOLDOWN_LABEL,
-  ...IGNORED_LABELS,
-];
 const KEY_BY_NORM = new Map(STAT_LABELS.map((e) => [norm(e.label), e.key]));
 const COOLDOWN_NORM = norm(COOLDOWN_LABEL);
+// 長いラベルから先に試す = 'DAMAGE RANGE' が 'DAMAGE' に食われない
+const ALL_NORMS = [
+  ...STAT_LABELS.map((e) => e.label), COOLDOWN_LABEL, ...IGNORED_LABELS,
+].map(norm).sort((a, b) => b.length - a.length);
 
-// 長いラベルを先に置く = 'DAMAGE RANGE' が 'DAMAGE' に食われない
-// (正規表現の選択肢は左から試されるため、この並び順自体が優先順位になる)
-const LABEL_RE = new RegExp(
-  `(${[...ALL_LABELS].sort((a, b) => b.length - a.length)
-    .map((l) => l.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/I/g, '[Il]').replace(/ /g, '\\s*'))
-    .join('|')})`,
-  'gi',
-);
+const UNKNOWN_CH = '�'; // ocr.js が未知グリフに使う文字
+
+// 行を「英字と未知グリフだけの列」に落とし、各要素の元テキスト上の位置も持って帰る。
+// 位置を持つのは、ラベル一致後に「次のラベルまで」を値の範囲として切り出すため
+function normChars(text) {
+  const s = String(text).replace(/I/g, 'l').toUpperCase();
+  const chars = [], idx = [];
+  for (let i = 0; i < s.length; i++) {
+    const c = s[i];
+    if (c === UNKNOWN_CH) { chars.push('?'); idx.push(i); }
+    else if (c >= 'A' && c <= 'Z') { chars.push(c); idx.push(i); }
+  }
+  return { chars, idx };
+}
+
+// chars[pos] からラベルが始まるか。未知グリフ '?' は1〜3文字ぶんのワイルドカードとして扱う
+// (フォント差で数グリフ落ちてもラベルを見失わないため。他の文字は完全一致なので誤爆しにくい)
+function matchLabelAt(chars, pos, label) {
+  if (!label) return pos;
+  if (pos >= chars.length) return -1;
+  const c = chars[pos];
+  if (c === '?') {
+    for (let k = 1; k <= 3 && k <= label.length; k++) {
+      const e = matchLabelAt(chars, pos + 1, label.slice(k));
+      if (e >= 0) return e;
+    }
+    return -1;
+  }
+  return c === label[0] ? matchLabelAt(chars, pos + 1, label.slice(1)) : -1;
+}
 
 const textOf = (ln) => (typeof ln === 'string' ? ln : (ln?.text ?? ''));
 
@@ -83,15 +107,31 @@ export function parseStatWindow(lines) {
   for (const ln of lines) {
     const text = textOf(ln);
     if (!text.trim()) continue;
-    const hits = [...text.matchAll(LABEL_RE)];
+    const { chars, idx } = normChars(text);
+
+    // 行内のラベル出現を左から順に拾う(2カラムなので1行に2つ並ぶ)
+    const hits = [];
+    for (let pos = 0; pos < chars.length; ) {
+      let found = null;
+      for (const label of ALL_NORMS) {
+        const end = matchLabelAt(chars, pos, label);
+        if (end >= 0) { found = { label, pos, end }; break; }
+      }
+      if (found) {
+        hits.push({
+          norm: found.label,
+          rawStart: idx[found.pos],
+          rawEnd: idx[found.end - 1] + 1,
+        });
+        pos = found.end;
+      } else pos++;
+    }
     if (!hits.length) { unknownLines.push(text); continue; }
 
     hits.forEach((m, i) => {
       // 値の範囲 = このラベルの直後 〜 次のラベルの手前(なければ行末)
-      const from = m.index + m[0].length;
-      const to = i + 1 < hits.length ? hits[i + 1].index : text.length;
-      const seg = text.slice(from, to);
-      const n = norm(m[0]);
+      const seg = text.slice(m.rawEnd, i + 1 < hits.length ? hits[i + 1].rawStart : text.length);
+      const n = m.norm;
 
       if (n === COOLDOWN_NORM) {
         const sec = /(-?[\d.]+)\s*sec/i.exec(seg);
