@@ -1,0 +1,6 @@
+﻿method,advantaged,line_count,probability,note,source_id
+rebirth_flame,false,1,0.4,通常装備に転生素材を使用,official_kms_probability
+rebirth_flame,false,2,0.4,通常装備に転生素材を使用,official_kms_probability
+rebirth_flame,false,3,0.16,通常装備に転生素材を使用,official_kms_probability
+rebirth_flame,false,4,0.04,通常装備に転生素材を使用,official_kms_probability
+rebirth_flame,true,4,1,ボス／転生優遇装備は4行固定,official_kms_probability

@@ -70,7 +70,7 @@
 </div>
 
 <div class="panel" id="tab-plan" style="display:none">
-  <div style="margin-bottom:10px; display:flex; gap:12px; align-items:center; flex-wrap:wrap">
+  <div class="plan-head">
     <label>主ステ:
       <select id="plan-stat">
         <option value="STR" selected>STR</option>
@@ -83,6 +83,54 @@
   </div>
   <div id="plan-wrap" style="overflow-x:auto"></div>
   <div id="plan-notes" style="color:var(--ink-dim);font-size:12px;margin-top:10px;line-height:1.8"></div>
+
+  <section class="flame-section">
+    <div class="flame-title-row">
+      <div>
+        <h2>転生更新チェック</h2>
+        <p>取得した転生値を確率分布と比較します。通常職の非武器のみ対応し、Xenon・Demon Avenger・武器は対象外です。</p>
+      </div>
+      <span id="flame-summary"></span>
+    </div>
+    <div class="flame-controls">
+      <label>副ステ
+        <select id="flame-secondary-stat">
+          <option value="STR">STR</option><option value="DEX">DEX</option>
+          <option value="INT">INT</option><option value="LUK">LUK</option>
+        </select>
+      </label>
+      <label>副ステ1=<input id="flame-secondary-weight" type="number" min="0" max="1000000" step="0.01" value="0.1"></label>
+      <label>ALL%1=<input id="flame-all-weight" type="number" min="0" max="1000000" step="0.1" value="10"></label>
+      <label>ATT/MATT1=<input id="flame-attack-weight" type="number" min="0" max="1000000" step="0.1" value="4"></label>
+      <label>攻撃種
+        <select id="flame-attack-type">
+          <option value="attack_power">ATT</option>
+          <option value="magic_att">MATT</option>
+        </select>
+      </label>
+      <label>転生素材
+        <select id="flame-source-type">
+          <option value="eternal_black">永遠／黒い転生の炎</option>
+          <option value="powerful">強力な転生の炎</option>
+        </select>
+      </label>
+      <button id="flame-reset" type="button">参考値へ戻す</button>
+    </div>
+    <div class="flame-reference-note">
+      <button class="flame-reference-trigger" type="button" aria-describedby="flame-reference-tooltip">計算上の注意 <span aria-hidden="true">ⓘ</span></button>
+      <div class="flame-reference-tooltip" id="flame-reference-tooltip" role="tooltip">
+        <ul>
+          <li>ALL%=10、ATT/MATT=4、副ステ=0.1は公式値ではなく参考換算値です。変更すると基準も再計算します。</li>
+          <li>平均個数は、現在スコアを厳密に上回るまでの期待消費数です。</li>
+          <li>確率モデルはKMS公式仕様を基準としており、現在のGMSとの一致は未確認です。</li>
+          <li>特殊な固定Tier装備は、転生区分で対象外に指定してください。</li>
+          <li>現在と完全に同じ結果を再抽選する処理は、元ライン構成を復元できないため分布に含めていません。</li>
+        </ul>
+      </div>
+    </div>
+    <div id="flame-wrap"></div>
+    <div id="flame-notes"></div>
+  </section>
 </div>
 
 <div class="panel" id="tab-scouter" style="display:none">

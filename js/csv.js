@@ -12,6 +12,8 @@ export const COLUMNS = [
   'potential_grade',
   'pot1_text', 'pot1_grade', 'pot2_text', 'pot2_grade', 'pot3_text', 'pot3_grade',
   'extra_lines', 'raw_text',
+  // 既存CSV利用者の列位置を変えないため、新規列は末尾へ追加する。
+  'req_level_base', 'flame_advantaged',
 ];
 
 function esc(v) {
