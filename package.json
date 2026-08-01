@@ -3,7 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node test/run.mjs ocr && node test/run.mjs parse && node test/run.mjs tooltip && node test/enhance.test.mjs && node test/flame.test.mjs",
+    "test": "node test/run.mjs ocr && node test/run.mjs parse && node test/run.mjs tooltip && node test/flame.test.mjs && node test/enhance.test.mjs",
     "serve": "python -m http.server 8471"
   }
 }

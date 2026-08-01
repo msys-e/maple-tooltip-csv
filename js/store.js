@@ -4,6 +4,7 @@ const K_SNAPSHOTS = 'mtc:snapshots';
 const K_USERBANK = 'mtc:userbank';
 const K_SCOUTER = 'mtc:scouter';
 const K_FLAME_SETTINGS = 'mtc:flame-settings';
+const K_PLAN_ALL_STEPS = 'mtc:plan-all-steps';
 
 function load(key, fallback) {
   try {
@@ -28,6 +29,10 @@ export const loadScouter = () => load(K_SCOUTER, { slot: '1', values: {} });
 export const saveScouter = (form) => save(K_SCOUTER, form);
 export const loadFlameSettings = () => load(K_FLAME_SETTINGS, {});
 export const saveFlameSettings = (settings) => save(K_FLAME_SETTINGS, settings);
+
+// 強化プランの表示モード(true=同一装備の先の段階も全部出す)
+export const loadPlanAllSteps = () => load(K_PLAN_ALL_STEPS, false) === true;
+export const savePlanAllSteps = (on) => save(K_PLAN_ALL_STEPS, !!on);
 
 export const listSnapshots = () => load(K_SNAPSHOTS, []);
 

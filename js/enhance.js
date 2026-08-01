@@ -100,38 +100,50 @@ export function countPotLines(item, lineKind, mainStat) {
   return n;
 }
 
-// 1装備×1行の適用可否
-export function applicable(item, row, mainStat) {
+// 1装備×1行の段階判定
+//   'next'   … 今すぐ実行できる(現状がその行の開始条件そのもの)
+//   'future' … この装備で先々到達しうる(今の状態より先の段階)
+//   null     … 適用不可(部位/Lv違い・通り過ぎた・目標達成済み)
+export function planStep(item, row, mainStat) {
   const lv = nearestLv(item.req_level_base ?? item.req_level);
-  if (lv === null || lv !== row.lv) return false;
+  if (lv === null || lv !== row.lv) return null;
   if (row.kind === 'star') {
-    if (item.no_starforce) return false;
+    if (item.no_starforce) return null;
     // 空文字はNumber('')===0で★0に化けるため明示的に弾く(星認識失敗した装備への誤提案防止)
-    if (item.star_count === '' || item.star_count === null || item.star_count === undefined) return false;
+    if (item.star_count === '' || item.star_count === null || item.star_count === undefined) return null;
     const s = Number(item.star_count);
-    if (!Number.isFinite(s)) return false;
-    return row.s0 === 0 ? s < 18 : s === row.s0;
+    if (!Number.isFinite(s)) return null;
+    // 0→18★ の行は18★未満の装備の「今の一手」。それ以外は開始★が現状と一致すれば今、先なら将来
+    if (row.s0 === 0) return s < 18 ? 'next' : null;
+    if (s === row.s0) return 'next';
+    return row.s0 > s ? 'future' : null;
   }
   if (row.kind === 'pot') {
-    if (partOf(item.equip_type) !== row.part) return false;
+    if (partOf(item.equip_type) !== row.part) return null;
     // 表のコストはレジェンダリー前提。未到達の装備は先にレジェ到達が必要なので対象外(注記で案内)
-    if (!/Legendary/i.test(item.potential_grade || '')) return false;
+    if (!/Legendary/i.test(item.potential_grade || '')) return null;
     const goal = goalSpec(row.goal);
     const from = fromSpec(row.from);
-    if (!goal || !from) return false;
+    if (!goal || !from) return null;
     const kind = from.lineKind || goal.lineKind;
     const cur = countPotLines(item, kind, mainStat);
-    if (cur !== from.n) return false;
+    if (cur > from.n) return null; // 開始条件を通り過ぎている
     // 既に目標達成なら出さない
     const goalCur = countPotLines(item, goal.lineKind, mainStat);
-    if (goalCur >= goal.n && !goal.plusMain) return false;
     if (goal.plusMain) {
       const mainCur = countPotLines(item, 'main_incl', mainStat);
-      if (goalCur >= goal.n && mainCur >= goal.plusMain) return false;
+      if (goalCur >= goal.n && mainCur >= goal.plusMain) return null;
+    } else if (goalCur >= goal.n) {
+      return null;
     }
-    return true;
+    return cur === from.n ? 'next' : 'future';
   }
-  return false;
+  return null;
+}
+
+// 1装備×1行の適用可否(今すぐ実行できる一手か)
+export function applicable(item, row, mainStat) {
+  return planStep(item, row, mainStat) === 'next';
 }
 
 // 表の元値を保ったまま、表示・並べ替えに使う実効コストを返す。
@@ -153,12 +165,19 @@ export function effectivePlanCost(row, { cubeSale = false } = {}) {
 }
 
 // プラン構築: 全装備×全行の適用可能ペアを実効コスト順に
-export function buildPlan(items, table, mainStat, options = {}) {
+// includeFuture=true で「今の一手」だけでなく、その装備で先々到達しうる段階も全て出す
+export function buildPlan(items, table, mainStat, { includeFuture = false, cubeSale = false } = {}) {
   const plan = [];
   for (const item of items) {
     for (const row of table) {
-      if (applicable(item, row, mainStat)) {
-        plan.push({ item, row, ...effectivePlanCost(row, options) });
+      const step = planStep(item, row, mainStat);
+      if (step === 'next' || (includeFuture && step === 'future')) {
+        plan.push({
+          item,
+          row,
+          immediate: step === 'next',
+          ...effectivePlanCost(row, { cubeSale }),
+        });
       }
     }
   }
