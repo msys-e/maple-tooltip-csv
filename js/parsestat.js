@@ -175,19 +175,27 @@ export function parseStatPopup(lines, target) {
 
   const values = {};
   const unknownLines = [];
-  const put = (key, nums) => {
-    if (nums.length && values[key] === undefined) values[key] = nums[0].value;
-  };
+  let pos = 0; // 値を持つ行の通し番号。行のラベルが読めなかったときの位置フォールバック用
   for (const ln of lines) {
     const text = textOf(ln);
     if (!text.trim()) continue;
     const nums = numbersIn(text);
+    if (!nums.length) continue; // "[Base Value]" のような見出し行は値が無いので無視
+
+    let key;
     // ★「% Value Not Applied」を先に判定する。これも /% Value/ に当たるため、
     //   順序を逆にすると増加率(% Value)を固定加算の値で上書きしてしまう
-    if (/Not\s*App[lI]ied/i.test(text)) put(keys[2], nums);
-    else if (/%\s*Va[lI]ue/i.test(text)) put(keys[1], nums);
-    else if (/Base\s*Va[lI]ue/i.test(text)) put(keys[0], nums);
-    else if (!/^\s*\[/.test(text)) unknownLines.push(text); // [Base Value] 等の見出しは無視
+    if (/Not\s*App[lI]ied/i.test(text)) key = keys[2];
+    else if (/%\s*Va[lI]ue/i.test(text)) key = keys[1];
+    else if (/Base\s*Va[lI]ue/i.test(text)) key = keys[0];
+    else {
+      // ラベルが未知グリフで読めなくても、[Applied Value] の行順は
+      // 素 → 増加率 → 固定加算 で固定なので位置から決められる
+      key = keys[pos];
+      unknownLines.push(text);
+    }
+    if (key && values[key] === undefined) values[key] = nums[0].value;
+    pos++;
   }
   return { values, unknownLines };
 }

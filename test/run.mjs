@@ -354,7 +354,7 @@ if (cmd === 'statdetect') {
   }
 
   const pop = load('stat_popup_matt');
-  eq(findStatPopup(pop), { x: 426, y: 459, w: 180, h: 48 }, 'ポップアップ [Applied Value] 直後3行ぶんの矩形');
+  eq(findStatPopup(pop), { x: 426, y: 459, w: 210, h: 64 }, 'ポップアップ [Applied Value] 直後3行ぶんの矩形');
   const popLines = segmentLines(crop(pop, findStatPopup(pop)));
   eq(popLines.length, 2, 'MAGIC ATTのポップアップは2行(3行目が無い。見出し[Base Value]も巻き込まない)');
 
@@ -472,7 +472,14 @@ if (cmd === 'parsestat') {
     { subStatBase: 999, subStatPer: 0 }, 'サブステ(0%でもキーを作る)');
   eq(parseStatPopup(['Base Value : 2546'], 'atk').values, { atkBase: 2546 }, '%行が無くても落ちない');
   eq(parseStatPopup(['Base Value : 2546', '% Value : 5%'], 'unknown').values, {}, '対象不明なら何も返さない');
-  eq(parseStatPopup(['[Base Value]', 'なにか'], 'atk').unknownLines, ['なにか'], '見出し行は無視し、想定外の行だけ報告する');
+  eq(parseStatPopup(['[Base Value]', 'なにか'], 'atk').unknownLines, [], '値の無い行(見出し・文字だけ)は無視する');
+  // ラベルが未知グリフで潰れても、行順(素→増加率→固定加算)から復元できる
+  eq(parseStatPopup(['B?se V?lue : 6604', '% V?lue : 518%', '% V?lue N?t A??lied : 30700'], 'mainStat').values,
+    { mainStatBase: 6604, mainStatPer: 518, mainStatAbs: 30700 },
+    'OCRが一部潰れても位置で復元(%行の取り違えも起きない)');
+  eq(parseStatPopup(['???? : 6604', '???? : 518%', '???? : 30700'], 'subStat').values,
+    { subStatBase: 6604, subStatPer: 518, subStatAbs: 30700 },
+    'ラベルが全滅しても行順で割り当てる');
 
   console.log(`\nparsestat: pass=${pass} fail=${fail}`);
   process.exitCode = fail ? 1 : 0;
