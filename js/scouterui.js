@@ -234,7 +234,11 @@ export function initScouterUI(deps = {}) {
   $('scouter-slot').value = form.slot;
   updateSlotLabels(form.slot);
 
-  $('scouter-form').addEventListener('input', persist);
+  $('scouter-form').addEventListener('input', (e) => {
+    // 手で書き換えたらOCR由来の印は外す(色は「OCRが入れた値」の意味なので)
+    if (e.target?.dataset?.key) e.target.classList.remove('filled');
+    persist();
+  });
   $('scouter-slot').addEventListener('change', () => {
     persist();
     updateSlotLabels(form.slot);
@@ -245,7 +249,9 @@ export function initScouterUI(deps = {}) {
   $('btn-scouter-clear').addEventListener('click', () => {
     for (const f of SCOUTER_FIELDS) {
       const el = $(inputId(f.key));
-      if (el) el.value = '';
+      if (!el) continue;
+      el.value = '';
+      el.classList.remove('filled'); // OCRで入れた印も消す(空欄なのに色が残ると誤解する)
     }
     persist();
     $('scouter-out').style.display = 'none';
