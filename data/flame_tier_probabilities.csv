@@ -1,0 +1,17 @@
+﻿source_type,advantaged,tier,probability,note,source_id
+powerful,false,1,0.2,通常装備のTier,official_kms_probability
+powerful,false,2,0.3,通常装備のTier,official_kms_probability
+powerful,false,3,0.36,通常装備のTier,official_kms_probability
+powerful,false,4,0.14,通常装備のTier,official_kms_probability
+powerful,true,3,0.2,ボス／転生優遇装備は決定Tierに+2,official_kms_probability
+powerful,true,4,0.3,ボス／転生優遇装備は決定Tierに+2,official_kms_probability
+powerful,true,5,0.36,ボス／転生優遇装備は決定Tierに+2,official_kms_probability
+powerful,true,6,0.14,ボス／転生優遇装備は決定Tierに+2,official_kms_probability
+eternal_black,false,2,0.29,通常装備のTier,official_kms_probability
+eternal_black,false,3,0.45,通常装備のTier,official_kms_probability
+eternal_black,false,4,0.25,通常装備のTier,official_kms_probability
+eternal_black,false,5,0.01,通常装備のTier,official_kms_probability
+eternal_black,true,4,0.29,ボス／転生優遇装備は決定Tierに+2,official_kms_probability
+eternal_black,true,5,0.45,ボス／転生優遇装備は決定Tierに+2,official_kms_probability
+eternal_black,true,6,0.25,ボス／転生優遇装備は決定Tierに+2,official_kms_probability
+eternal_black,true,7,0.01,ボス／転生優遇装備は決定Tierに+2,official_kms_probability

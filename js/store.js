@@ -3,6 +3,7 @@ const K_ITEMS = 'mtc:items';
 const K_SNAPSHOTS = 'mtc:snapshots';
 const K_USERBANK = 'mtc:userbank';
 const K_SCOUTER = 'mtc:scouter';
+const K_FLAME_SETTINGS = 'mtc:flame-settings';
 
 function load(key, fallback) {
   try {
@@ -25,6 +26,8 @@ export const saveUserBank = (glyphs) => save(K_USERBANK, glyphs);
 // スカウター連携フォームの入力内容 { slot, values: {key: 文字列} }
 export const loadScouter = () => load(K_SCOUTER, { slot: '1', values: {} });
 export const saveScouter = (form) => save(K_SCOUTER, form);
+export const loadFlameSettings = () => load(K_FLAME_SETTINGS, {});
+export const saveFlameSettings = (settings) => save(K_FLAME_SETTINGS, settings);
 
 export const listSnapshots = () => load(K_SNAPSHOTS, []);
 
@@ -48,11 +51,12 @@ export function getSnapshot(id) {
 // ファイル退避用: 全データを1つのJSONに
 export function exportAll() {
   return JSON.stringify({
-    version: 1,
+    version: 2,
     exported_at: new Date().toISOString(),
     items: loadItems(),
     snapshots: listSnapshots(),
     userbank: loadUserBank(),
+    flame_settings: loadFlameSettings(),
   }, null, 1);
 }
 
@@ -60,7 +64,7 @@ export function exportAll() {
 export function importAll(jsonText, merge = true) {
   const data = JSON.parse(jsonText);
   if (!data || typeof data !== 'object') throw new Error('invalid json');
-  const summary = { items: 0, snapshots: 0, userbank: 0 };
+  const summary = { items: 0, snapshots: 0, userbank: 0, flame_settings: 0 };
   if (Array.isArray(data.items)) {
     const items = merge ? loadItems().concat(data.items) : data.items;
     saveItems(items);
@@ -76,6 +80,10 @@ export function importAll(jsonText, merge = true) {
     const bank = merge ? { ...loadUserBank(), ...data.userbank } : data.userbank;
     saveUserBank(bank);
     summary.userbank = Object.keys(data.userbank).length;
+  }
+  if (data.flame_settings && typeof data.flame_settings === 'object') {
+    saveFlameSettings(data.flame_settings);
+    summary.flame_settings = 1;
   }
   return summary;
 }

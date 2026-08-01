@@ -7,6 +7,10 @@ import { downloadCSV } from './csv.js';
 import * as store from './store.js';
 import { CaptureController, installDropPaste } from './capture.js';
 import { parseRankingCSV, buildPlan, partOf, nearestLv, excludeReason, TABLE_LVS } from './enhance.js';
+import {
+  parseFlameData, flameEligibility, inferFlameAdvantaged, evaluateFlameItem,
+  normalizeFlameSettings, migrateFlameSettings, formatFlamePercentile, DEFAULT_SECONDARY,
+} from './flame.js';
 import { Labeler } from './labeler.js';
 import { initScouterUI } from './scouterui.js';
 
@@ -145,7 +149,12 @@ function sortedView() {
 function render() {
   const wrap = $('table-wrap');
   $('empty-hint').style.display = items.length ? 'none' : 'block';
-  if (!items.length) { wrap.innerHTML = ''; updateMeta(); return; }
+  if (!items.length) {
+    wrap.innerHTML = '';
+    if ($('tab-plan').style.display !== 'none') renderPlan();
+    updateMeta();
+    return;
+  }
 
   const cols = COL_DEFS.filter((d) => isVisible(d.key));
   let html = '<table><thead><tr><th></th>';
@@ -291,6 +300,26 @@ $('zoom-back').addEventListener('click', () => $('zoom-back').classList.remove('
 
 // ---------- タブ・強化プラン ----------
 let rankingTable = [];
+let flameData = null;
+let flameDataState = 'loading';
+const DEFAULT_FLAME_SETTINGS = {
+  settingsVersion: 2,
+  mainStat: 'STR', secondaryStat: 'DEX', secondaryWeight: 0.1, allStatWeight: 10,
+  attackWeight: 4, attackType: 'attack_power', sourceType: 'eternal_black',
+};
+function loadStoredFlameSettings() {
+  const loaded = store.loadFlameSettings();
+  const saved = loaded && typeof loaded === 'object' && !Array.isArray(loaded) ? loaded : {};
+  const normalized = migrateFlameSettings(saved);
+  // 旧版で既定値だったALL%=15だけを新しい既定値10へ移行する。
+  // 旧保存形式(mainStatなし)は、組合せが食い違わないよう標準ペアへ移行する。
+  if (saved.settingsVersion !== normalized.settingsVersion || saved.allStatWeight !== normalized.allStatWeight) {
+    store.saveFlameSettings(normalized);
+  }
+  return normalized;
+}
+let flameSettings = loadStoredFlameSettings();
+$('plan-stat').value = flameSettings.mainStat;
 
 for (const btn of document.querySelectorAll('.tab-btn')) {
   btn.addEventListener('click', () => {
@@ -302,7 +331,67 @@ for (const btn of document.querySelectorAll('.tab-btn')) {
     if (btn.dataset.tab === 'plan') renderPlan();
   });
 }
-$('plan-stat').addEventListener('change', renderPlan);
+
+function syncFlameControls() {
+  flameSettings = normalizeFlameSettings(flameSettings);
+  $('flame-secondary-stat').value = flameSettings.secondaryStat;
+  for (const option of $('flame-secondary-stat').options) {
+    option.disabled = option.value === flameSettings.mainStat;
+  }
+  $('flame-secondary-weight').value = flameSettings.secondaryWeight;
+  $('flame-all-weight').value = flameSettings.allStatWeight;
+  $('flame-attack-weight').value = flameSettings.attackWeight;
+  $('flame-attack-type').value = flameSettings.attackType;
+  $('flame-source-type').value = flameSettings.sourceType;
+}
+
+function numericControl(id, fallback) {
+  const n = Number($(id).value);
+  return Number.isFinite(n) && n >= 0 ? n : fallback;
+}
+
+function readFlameControls() {
+  flameSettings = normalizeFlameSettings({
+    mainStat: $('plan-stat').value,
+    secondaryStat: $('flame-secondary-stat').value,
+    secondaryWeight: numericControl('flame-secondary-weight', 0.1),
+    allStatWeight: numericControl('flame-all-weight', 10),
+    attackWeight: numericControl('flame-attack-weight', 4),
+    attackType: $('flame-attack-type').value,
+    sourceType: $('flame-source-type').value,
+  });
+  syncFlameControls();
+  store.saveFlameSettings(flameSettings);
+}
+
+$('plan-stat').addEventListener('change', () => {
+  const mainStat = $('plan-stat').value;
+  flameSettings.mainStat = mainStat;
+  flameSettings.secondaryStat = DEFAULT_SECONDARY[mainStat];
+  flameSettings.attackType = mainStat === 'INT' ? 'magic_att' : 'attack_power';
+  store.saveFlameSettings(flameSettings);
+  syncFlameControls();
+  renderPlan();
+});
+
+for (const id of ['flame-secondary-stat', 'flame-secondary-weight', 'flame-all-weight',
+  'flame-attack-weight', 'flame-attack-type', 'flame-source-type']) {
+  $(id).addEventListener('change', () => { readFlameControls(); renderFlamePlan(); });
+}
+$('flame-reset').addEventListener('click', () => {
+  const mainStat = $('plan-stat').value;
+  flameSettings = {
+    ...DEFAULT_FLAME_SETTINGS,
+    mainStat,
+    secondaryStat: DEFAULT_SECONDARY[mainStat],
+    attackType: mainStat === 'INT' ? 'magic_att' : 'attack_power',
+  };
+  store.saveFlameSettings(flameSettings);
+  syncFlameControls();
+  renderFlamePlan();
+  toast('転生スコア係数を参考値に戻しました', 'warn');
+});
+syncFlameControls();
 
 function potSummary(it) {
   return [1, 2, 3].map((n) => it[`pot${n}_text`]).filter(Boolean)
@@ -311,9 +400,16 @@ function potSummary(it) {
 }
 
 function renderPlan() {
+  renderEnhancePlan();
+  renderFlamePlan();
+}
+
+function renderEnhancePlan() {
   const wrap = $('plan-wrap');
   if (!rankingTable.length) {
     wrap.innerHTML = '<div style="color:var(--ink-dim);padding:20px">強化効率表(data/ranking.csv)が読み込めていません</div>';
+    $('plan-summary').textContent = '';
+    $('plan-notes').textContent = '';
     return;
   }
   const mainStat = $('plan-stat').value;
@@ -355,6 +451,121 @@ function renderPlan() {
   $('plan-notes').innerHTML = [lvNote, notes.length ? `対象外: ${notes.map(esc).join(' ／ ')}` : '']
     .filter(Boolean).join('<br>');
 }
+
+function fmtScore(n) {
+  return Number.isInteger(n) ? String(n) : Number(n).toFixed(1).replace(/\.0$/, '');
+}
+
+function fmtImprovementProbability(probability) {
+  const percent = probability * 100;
+  if (percent >= 10) return `${percent.toFixed(1)}%`;
+  if (percent >= 1) return `${percent.toFixed(2)}%`;
+  if (percent >= 0.01) return `${percent.toFixed(3)}%`;
+  return `${percent.toPrecision(2)}%`;
+}
+
+function fmtExpectedAttempts(evaluation) {
+  const probability = evaluation.improvementProbability;
+  if (probability === null || probability === undefined) return '—';
+  if (probability <= 0 || !Number.isFinite(evaluation.expectedAttempts)) return '到達不可 (0%)';
+  const expected = evaluation.expectedAttempts;
+  const maximumFractionDigits = expected < 10 ? 2 : expected < 100 ? 1 : 0;
+  const count = expected.toLocaleString('ja-JP', { maximumFractionDigits });
+  return `${count}個 (${fmtImprovementProbability(probability)})`;
+}
+
+function advantageOptions(resolved) {
+  const autoLabel = resolved.source === 'name' ? '推定: ボス転生あり' : '不明 (要指定)';
+  return `<option value="auto" ${!resolved.source.startsWith('manual') ? 'selected' : ''}>${autoLabel}</option>` +
+    `<option value="true" ${resolved.source === 'manual' && resolved.value ? 'selected' : ''}>ボス転生あり</option>` +
+    `<option value="false" ${resolved.source === 'manual' && !resolved.value ? 'selected' : ''}>ボス転生なし (通常)</option>` +
+    `<option value="fixed" ${resolved.source === 'manual_fixed' ? 'selected' : ''}>特殊固定Tier (対象外)</option>`;
+}
+
+function renderFlamePlan() {
+  const wrap = $('flame-wrap');
+  if (!flameData) {
+    const message = flameDataState === 'error'
+      ? '転生確率データの読み込みに失敗しました。ページを再読み込みしてください。'
+      : '転生確率データを読み込み中です';
+    wrap.innerHTML = `<div style="color:var(--ink-dim);padding:20px">${message}</div>`;
+    $('flame-summary').textContent = '';
+    $('flame-notes').textContent = '';
+    return;
+  }
+  const settings = { ...flameSettings, mainStat: $('plan-stat').value };
+  const rows = [];
+  const weaponNames = [];
+  let excluded = 0;
+  for (let index = 0; index < items.length; index++) {
+    const item = items[index];
+    const eligibility = flameEligibility(item);
+    if (eligibility.kind === 'weapon') { weaponNames.push(item.item_name); continue; }
+    if (eligibility.kind !== 'non_weapon') { excluded++; continue; }
+    const advantage = inferFlameAdvantaged(item);
+    const evaluation = evaluateFlameItem(item, flameData, settings, advantage.value);
+    rows.push({ index, item, advantage, evaluation });
+  }
+  rows.sort((a, b) => a.evaluation.band.rank - b.evaluation.band.rank ||
+    (a.evaluation.percentile ?? 2) - (b.evaluation.percentile ?? 2) || a.evaluation.score - b.evaluation.score);
+  const ready = rows.filter((r) => r.evaluation.percentile !== null).length;
+  $('flame-summary').textContent = `判定 ${ready}/${rows.length} 装備 · 弱い順`;
+  if (!rows.length) {
+    wrap.innerHTML = '<div style="color:var(--ink-dim);padding:20px">判定できる非武器の転生装備がありません</div>';
+  } else {
+    let html = '<table><thead><tr><th>#</th><th>判定</th><th>アイテム</th><th>部位 / IL</th><th>転生区分</th><th>スコア</th><th>位置</th><th>平均個数 (更新確率)</th><th>基準 (80 / 95 / 99 / 99.9%)</th><th>内訳</th></tr></thead><tbody>';
+    rows.forEach(({ index, item, advantage, evaluation }, i) => {
+      const ev = evaluation;
+      const pct = formatFlamePercentile(ev.percentile);
+      const expectedAttempts = fmtExpectedAttempts(ev);
+      const targets = ev.unsupportedReason ? '対象外' : !ev.valid ? '転生値を確認' : ev.targets
+        ? `${fmtScore(ev.targets.p80)} / ${fmtScore(ev.targets.p95)} / ${fmtScore(ev.targets.p99)} / ${fmtScore(ev.targets.p999)}`
+        : 'ボス転生を指定';
+      const attackLabel = settings.attackType === 'magic_att' ? 'MATT' : 'ATT';
+      const details = ev.unsupportedReason ? ev.unsupportedReason : ev.valid
+        ? `${settings.mainStat} ${ev.mainBonus} + ${settings.secondaryStat} ${ev.secondaryBonus}×${settings.secondaryWeight} + ` +
+          `ALL ${ev.allBonus}×${settings.allStatWeight} + ${attackLabel} ${ev.attackBonus}×${settings.attackWeight}`
+        : `不正な転生値: ${ev.invalidFields.join(', ')}`;
+      const scoreText = ev.unsupportedReason ? '—' : ev.valid ? fmtScore(ev.score) : '—';
+      html += `<tr class="band-${ev.band.key}">` +
+        `<td class="rank">${i + 1}</td>` +
+        `<td><span class="flame-band ${ev.band.key}">${ev.band.label}</span></td>` +
+        `<td class="name">${esc(item.item_name)}</td>` +
+        `<td>${esc(partOf(item.equip_type) ?? item.equip_type ?? '')} / IL${ev.eligibility.itemLevel}</td>` +
+        `<td><select class="flame-advantage" data-item-index="${index}" aria-label="${esc(item.item_name)}の転生区分">${advantageOptions(advantage)}</select></td>` +
+        `<td class="score" data-v="${scoreText}">${scoreText}</td>` +
+        `<td class="percentile" data-v="${pct}">${pct}</td>` +
+        `<td class="expectation" data-v="${expectedAttempts}">${expectedAttempts}</td>` +
+        `<td data-v="${targets}">${targets}</td>` +
+        `<td class="cur" title="${esc(details)}">${esc(details)}</td></tr>`;
+    });
+    html += '</tbody></table>';
+    wrap.innerHTML = html;
+  }
+  const notes = [];
+  const invalidRows = rows.filter((r) => !r.evaluation.valid);
+  if (invalidRows.length) notes.push(`転生値が不正な ${invalidRows.length}件は判定を保留しています。再取得またはJSONデータを確認してください。`);
+  if (rows.some((r) => r.advantage.value === null)) notes.push('「不明」の装備はボス転生の有無を指定すると判定できます。既知の装備名に一致した場合だけ「推定: ボス転生あり」と表示します。');
+  const fixedRows = rows.filter((r) => r.advantage.value === 'fixed');
+  if (fixedRows.length) notes.push(`特殊な固定Tier装備として指定した ${fixedRows.length}件は確率判定の対象外です。`);
+  if (weaponNames.length) notes.push(`武器は基礎攻撃力依存のため今回の順位から除外: ${weaponNames.map(esc).join('、')}`);
+  if (excluded) notes.push(`転生対象外・部位不明 ${excluded}件は非表示です。`);
+  notes.push('判定区分: 80%未満=最優先、80–95%=更新候補、95–99%=平均以上、99–99.9%=良好、99.9%以上=最高水準。');
+  notes.push('平均個数は、現在スコアを厳密に上回る結果が出るまでの期待消費数（1 ÷ 1回の更新確率）です。同点は更新に含みません。');
+  $('flame-notes').innerHTML = notes.join('<br>');
+}
+
+$('flame-wrap').addEventListener('change', (e) => {
+  const select = e.target.closest('select.flame-advantage');
+  if (!select) return;
+  const item = items[Number(select.dataset.itemIndex)];
+  if (!item) return;
+  if (select.value === 'auto') delete item.flame_advantaged;
+  else if (select.value === 'fixed') item.flame_advantaged = 'fixed';
+  else item.flame_advantaged = select.value === 'true';
+  store.saveItems(items);
+  renderFlamePlan();
+});
 
 $('btn-cols').addEventListener('click', () => {
   const p = $('col-panel');
@@ -652,6 +863,9 @@ $('import-file').addEventListener('change', async (e) => {
   try {
     const summary = store.importAll(await f.text(), true);
     items = store.loadItems();
+    flameSettings = loadStoredFlameSettings();
+    $('plan-stat').value = flameSettings.mainStat;
+    syncFlameControls();
     itemKeys.clear();
     for (const it of items) itemKeys.add(itemKey(it));
     for (const [k, v] of Object.entries(store.loadUserBank())) bank.add(k, v);
@@ -745,6 +959,23 @@ async function migrateThumbs() {
     rankingTable = parseRankingCSV(await (await fetch(`data/ranking.csv?v=${Date.now()}`)).text());
   } catch {
     toast('強化効率表(ranking.csv)の読み込みに失敗しました', 'warn');
+  }
+  try {
+    const [tierProbabilitiesText, lineProbabilitiesText] = await Promise.all([
+      fetch(`data/flame_tier_probabilities.csv?v=${Date.now()}`).then((r) => {
+        if (!r.ok) throw new Error('flame_tier_probabilities');
+        return r.text();
+      }),
+      fetch(`data/flame_line_probabilities.csv?v=${Date.now()}`).then((r) => {
+        if (!r.ok) throw new Error('flame_line_probabilities');
+        return r.text();
+      }),
+    ]);
+    flameData = parseFlameData({ tierProbabilitiesText, lineProbabilitiesText });
+    flameDataState = 'ready';
+  } catch {
+    flameDataState = 'error';
+    toast('転生確率データの読み込みに失敗しました', 'warn');
   }
   renderColPanel();
   render();

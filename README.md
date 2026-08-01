@@ -27,7 +27,11 @@ MapleStory の装備ツールチップを OCR して CSV 化するブラウザ�
 - **セルクリックでコピー**: 数値・内訳をクリップボードへ
 - **スナップショット**: その時点の表を名前付きで保存 → いつでも復元
 - **JSONエクスポート/インポート**: ファイル経由でバックアップ・PC間移動
+- **転生更新チェック**: 通常職の非武器について、同じIL・ボス転生区分の確率分布から更新優先度・1回の更新確率・更新までの平均必要個数を表示（Xenon・Demon Avenger・武器・特殊固定Tier装備は対象外）
+- **ボス転生の名前推定**: Root Abyss防具、転生可能なPitched Boss（漆黒）・Brilliant Boss（光輝）アクセサリなどの既知GMS名を自動判定
 - 保存先はすべてブラウザの localStorage（サーバに何も送らない）
+
+転生更新チェックの確率モデルはKMS公式の追加オプション仕様を基準にしています。現在のGMSとの一致は未確認です。ALL%=10、ATT/MATT=4、副ステ=0.1は公式値ではなく編集可能な参考換算値です。詳しくは [`docs/flame-data-notes.md`](docs/flame-data-notes.md) を参照してください。
 
 ## OCR の仕組み
 
@@ -55,10 +59,11 @@ node test/run.mjs seg        # 行/グリフ分割の確認
 node test/run.mjs label      # golden整列で辞書を再構築
 node test/run.mjs ocr        # OCR全行一致テスト
 node test/run.mjs parse      # パース結果のgolden比較
+node test/flame.test.mjs     # 転生スコア・確率分布テスト
 ```
 
 `samples/` + `test/fixtures/`(実フレーム) + `test/golden/` の25サンプルが回帰テスト。
-認識ロジックを触ったら `npm test` (ocr+parse) が緑のままであることを確認する。
+`npm test` でOCR・パース・転生判定の全テストが緑のままであることを確認する。
 `node test/diag.mjs <frame.png>` でライブフレームの未知グリフを解析できる。
 
 ## Contributing / License
