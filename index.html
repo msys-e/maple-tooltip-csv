@@ -53,6 +53,7 @@
 <div class="tabs">
   <button class="tab-btn active" data-tab="items">装備一覧</button>
   <button class="tab-btn" data-tab="plan">強化プラン</button>
+  <button class="tab-btn" data-tab="scouter">スカウター連携</button>
 </div>
 
 <div class="panel" id="tab-items">
@@ -82,6 +83,62 @@
   </div>
   <div id="plan-wrap" style="overflow-x:auto"></div>
   <div id="plan-notes" style="color:var(--ink-dim);font-size:12px;margin-top:10px;line-height:1.8"></div>
+</div>
+
+<div class="panel" id="tab-scouter" style="display:none">
+  <p class="sc-intro">
+    入力した値を <a href="https://maplescouter.com/ja/input" target="_blank" rel="noopener">maplescouter.com/ja/input</a> のプリセットへ流し込む
+    <b>使い捨てブックマークレット</b>を作ります。<br>
+    <span class="sc-dim">空欄の項目は送信されません（向こうで設定済みの職業などはそのまま残ります）。</span>
+  </p>
+
+  <div id="scouter-form"></div>
+
+  <div class="sc-actions">
+    <label>反映先プリセット:
+      <select id="scouter-slot">
+        <option value="1">1</option>
+        <option value="2">2</option>
+        <option value="3">3</option>
+      </select>
+    </label>
+    <button id="btn-scouter-build" class="primary">ブックマークレットを生成</button>
+    <button id="btn-scouter-clear">入力をクリア</button>
+  </div>
+
+  <div id="scouter-out" style="display:none">
+    <div class="sc-out-head">生成結果 <span id="scouter-built-info" class="sc-dim"></span></div>
+    <div class="sc-linkrow">
+      <a id="scouter-link" class="sc-bmlink" href="#" draggable="true">📥 スカウターに反映</a>
+      <button id="btn-scouter-copy">URLをコピー</button>
+    </div>
+    <div id="scouter-diff" class="sc-diff"></div>
+  </div>
+
+  <div class="sc-guide">
+    <h3>使い方（ドラッグ手順）</h3>
+    <div class="sc-figure" aria-hidden="true">
+      <div class="sc-browser">
+        <div class="sc-chrome"><i></i><i></i><i></i><span class="sc-url">maplescouter.com/ja/input</span></div>
+        <div class="sc-bmbar"><span class="sc-bm">★ よく見るページ</span><span class="sc-bm sc-drop">ここへドロップ</span></div>
+        <div class="sc-page">maplescouter</div>
+      </div>
+      <div class="sc-arrow">⬆</div>
+      <div class="sc-chip">📥 スカウターに反映</div>
+    </div>
+    <ol class="sc-steps">
+      <li><b>ブックマークバーを表示</b>する（Chrome / Edge / Firefox とも <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>B</kbd>）。</li>
+      <li>上の <b>「📥 スカウターに反映」ボタンをブックマークバーへドラッグ＆ドロップ</b>する。<br>
+        <span class="sc-dim">※クリックしても反映されません。ドラッグしてブックマークとして登録するのが正しい手順です。</span></li>
+      <li><a href="https://maplescouter.com/ja/input" target="_blank" rel="noopener">maplescouter.com/ja/input</a> を開き、<b>プリセット<span class="sc-slot-n">1</span></b> を選んで一度なにか入力しておく。</li>
+      <li>ブックマークバーの <b>「📥 スカウターに反映」をクリック</b>。値が入ってページが自動リロードされます。</li>
+    </ol>
+    <p class="sc-note">
+      値を変えたら<b>もう一度「生成」してドラッグし直し</b>てください（ブックマークには生成時点の値が焼き込まれています）。<br>
+      古い「📥 スカウターに反映」ブックマークは<b>右クリック→削除</b>で消しておくと混乱しません。<br>
+      ドラッグがうまくいかない場合は「URLをコピー」→ ブックマークを手動で新規作成し、URL欄に貼り付けてください。
+    </p>
+  </div>
 </div>
 
 <div class="modal-back" id="labeler-back">

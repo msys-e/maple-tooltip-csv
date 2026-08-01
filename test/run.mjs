@@ -3,6 +3,7 @@
 //   node test/run.mjs label          goldenテキストとの整列で辞書を自動構築 → data/glyphbank.json
 //   node test/run.mjs ocr            辞書で全行認識し golden と比較
 //   node test/run.mjs parse          パース結果を golden CSV(json) と比較
+//   node test/run.mjs scouter        maplescouter連携(差分生成・ブックマークレット)の単体テスト
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { decodePNG, writeBMP } from './png.mjs';
 import { findTooltip, countStars } from '../js/detect.js';
@@ -10,6 +11,7 @@ import { segmentLines } from '../js/segment.js';
 import { GlyphBank, recognizeLines } from '../js/ocr.js';
 import { parseTooltip } from '../js/parse.js';
 import { itemToRow, COLUMNS } from '../js/csv.js';
+import { buildDiff, applyDiff, buildBookmarklet, PRESET_KEY } from '../js/scouter.js';
 
 const SAMPLES = [
   'berserked', 'dawn_ring', 'genesis_sword', 'full_daybreak', 'full_mitra',
@@ -251,6 +253,113 @@ if (cmd === 'dump') {
   }
   writeBMP(`${OUT}${name}_L${lineNo}.bmp`, big);
   console.log(`wrote ${OUT}${name}_L${lineNo}.bmp`);
+}
+
+if (cmd === 'scouter') {
+  let pass = 0, fail = 0;
+  const ok = (cond, msg) => {
+    if (cond) { pass++; } else { fail++; console.log(` NG ${msg}`); }
+  };
+  const eq = (got, want, msg) => ok(
+    JSON.stringify(got) === JSON.stringify(want),
+    `${msg}\n   got : ${JSON.stringify(got)}\n   want: ${JSON.stringify(want)}`,
+  );
+
+  // --- buildDiff: 空欄除外 / カンマ・%・全角・単位の除去 / 数値化不能の除外 ---
+  eq(buildDiff({
+    level: '275',
+    dmg: '',
+    bossDmg: '1,234',
+    critical: '12%',
+    criticalDmg: '  8.5 ',
+    ignoreDef: 'abc',
+    coolTimeReduce: '2秒',
+    arcaneForce: '１２３',
+    normalDmg: '0',
+    myClass: 'アークメイジ', // フィールド定義外のキーは無視
+  }), {
+    // キー順は SCOUTER_FIELDS の定義順
+    level: 275, bossDmg: 1234, normalDmg: 0, critical: 12, criticalDmg: 8.5,
+    coolTimeReduce: 2, arcaneForce: 123,
+  }, 'buildDiff の数値変換');
+  ok(!('dmg' in buildDiff({ dmg: '' })), 'buildDiff: 空欄はキーごと除外');
+  ok(!('dmg' in buildDiff({ dmg: '   ' })), 'buildDiff: 空白のみはキーごと除外');
+  ok(!('dmg' in buildDiff({ dmg: 'abc' })), 'buildDiff: 数値化不能はキーごと除外');
+  ok(!('myClass' in buildDiff({ myClass: 'x' })), 'buildDiff: 未定義キーは持ち込まない');
+  eq(buildDiff({}), {}, 'buildDiff: 全欄空なら空オブジェクト');
+  eq(buildDiff({ dmg: '-5' }), { dmg: -5 }, 'buildDiff: 負値');
+
+  // --- applyDiff: マージ・非対象キー据え置き・構造欠損 ---
+  const freshRoot = () => JSON.parse(JSON.stringify({
+    state: { preset: { 1: { data: { stat: { myClass: 'アークメイジ', dmg: 1, level: 200 } } } } },
+    version: 0,
+  }));
+  const r1 = freshRoot();
+  const res1 = applyDiff(r1, '1', { dmg: 55, bossDmg: 300 });
+  ok(!res1.error, 'applyDiff: 正常系はerrorなし');
+  eq(r1.state.preset['1'].data.stat,
+    { myClass: 'アークメイジ', dmg: 55, level: 200, bossDmg: 300 },
+    'applyDiff: 差分マージ + 非対象キー据え置き');
+  eq(applyDiff(freshRoot(), 1, { dmg: 9 }).error, undefined, 'applyDiff: スロットは数値でも可');
+  eq(applyDiff(freshRoot(), '2', { dmg: 9 }).error, 'no-slot', 'applyDiff: スロット欠損');
+  eq(applyDiff({ state: {} }, '1', {}).error, 'no-preset', 'applyDiff: preset欠損');
+  eq(applyDiff({ state: { preset: { 1: {} } } }, '1', {}).error, 'no-stat', 'applyDiff: stat欠損');
+
+  // --- 生成コードをそのまま実行(出荷物の実挙動テスト) ---
+  function runBookmarklet(href, { hostname = 'maplescouter.com', stored } = {}) {
+    ok(href.startsWith('javascript:'), 'buildBookmarklet: javascript: スキーム');
+    const code = decodeURIComponent(href.slice('javascript:'.length));
+    const mem = new Map();
+    if (stored !== undefined) mem.set(PRESET_KEY, stored);
+    const alerts = [];
+    let reloaded = false;
+    const ls = {
+      getItem: (k) => (mem.has(k) ? mem.get(k) : null),
+      setItem: (k, v) => mem.set(k, String(v)),
+    };
+    const loc = { hostname, reload: () => { reloaded = true; } };
+    new Function('localStorage', 'location', 'alert', code)(ls, loc, (m) => alerts.push(String(m)));
+    return { alerts, reloaded, saved: mem.get(PRESET_KEY) };
+  }
+
+  const storedOk = JSON.stringify(freshRoot());
+  const href = buildBookmarklet({ dmg: 55, bossDmg: 300 }, '1');
+
+  const okRun = runBookmarklet(href, { stored: storedOk });
+  eq(okRun.alerts, [], '正常系: alertなし');
+  ok(okRun.reloaded, '正常系: location.reload() が呼ばれる');
+  eq(JSON.parse(okRun.saved), {
+    state: { preset: { 1: { data: { stat: { myClass: 'アークメイジ', dmg: 55, level: 200, bossDmg: 300 } } } } },
+    version: 0,
+  }, '正常系: 差分マージ結果が書き戻される(version等も保持)');
+
+  const wwwRun = runBookmarklet(href, { hostname: 'www.maplescouter.com', stored: storedOk });
+  ok(wwwRun.reloaded && !wwwRun.alerts.length, 'www サブドメインでも動く');
+
+  const badHost = runBookmarklet(href, { hostname: 'evil-maplescouter.com.example.jp', stored: storedOk });
+  ok(badHost.alerts.length === 1 && !badHost.reloaded, 'ホスト不一致: alertして中断');
+  eq(badHost.saved, storedOk, 'ホスト不一致: 書き込みなし');
+
+  const noKey = runBookmarklet(href, {});
+  ok(noKey.alerts.length === 1 && !noKey.reloaded, 'キー不在: alertして中断');
+  ok(/先にmaplescouter/.test(noKey.alerts[0] || ''), 'キー不在: 先に入力を促す文言');
+  ok(noKey.saved === undefined, 'キー不在: 新規作成しない');
+
+  const broken = runBookmarklet(href, { stored: '{"state":' });
+  ok(broken.alerts.length === 1 && !broken.reloaded, '壊れJSON: alertして中断');
+  eq(broken.saved, '{"state":', '壊れJSON: 元データを壊さない');
+
+  const noSlot = runBookmarklet(buildBookmarklet({ dmg: 1 }, '3'), { stored: storedOk });
+  ok(noSlot.alerts.length === 1 && !noSlot.reloaded, 'スロット不在: alertして中断');
+  ok(/プリセット3/.test(noSlot.alerts[0] || ''), 'スロット不在: 対象スロット番号を出す');
+  eq(noSlot.saved, storedOk, 'スロット不在: 書き込みなし');
+
+  // 文字列値のエスケープ(将来diffに文字列が入っても壊れない)
+  const esc = runBookmarklet(buildBookmarklet({ dmg: 1, note: `a'b"c\\d</script>` }, '1'), { stored: storedOk });
+  eq(JSON.parse(esc.saved).state.preset['1'].data.stat.note, `a'b"c\\d</script>`, '埋め込み値のエスケープ');
+
+  console.log(`\nscouter: pass=${pass} fail=${fail}`);
+  process.exitCode = fail ? 1 : 0;
 }
 
 if (cmd === 'ocr' || cmd === 'parse') {

@@ -2,6 +2,7 @@
 const K_ITEMS = 'mtc:items';
 const K_SNAPSHOTS = 'mtc:snapshots';
 const K_USERBANK = 'mtc:userbank';
+const K_SCOUTER = 'mtc:scouter';
 
 function load(key, fallback) {
   try {
@@ -20,6 +21,10 @@ export const saveItems = (items) => save(K_ITEMS, items);
 
 export const loadUserBank = () => load(K_USERBANK, {});
 export const saveUserBank = (glyphs) => save(K_USERBANK, glyphs);
+
+// スカウター連携フォームの入力内容 { slot, values: {key: 文字列} }
+export const loadScouter = () => load(K_SCOUTER, { slot: '1', values: {} });
+export const saveScouter = (form) => save(K_SCOUTER, form);
 
 export const listSnapshots = () => load(K_SNAPSHOTS, []);
 

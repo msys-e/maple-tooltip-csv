@@ -8,6 +8,7 @@ import * as store from './store.js';
 import { CaptureController, installDropPaste } from './capture.js';
 import { parseRankingCSV, buildPlan, partOf, nearestLv, excludeReason, TABLE_LVS } from './enhance.js';
 import { Labeler } from './labeler.js';
+import { initScouterUI } from './scouterui.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -294,8 +295,10 @@ let rankingTable = [];
 for (const btn of document.querySelectorAll('.tab-btn')) {
   btn.addEventListener('click', () => {
     document.querySelectorAll('.tab-btn').forEach((b) => b.classList.toggle('active', b === btn));
-    $('tab-items').style.display = btn.dataset.tab === 'items' ? 'block' : 'none';
-    $('tab-plan').style.display = btn.dataset.tab === 'plan' ? 'block' : 'none';
+    // タブ追加時にここを触らなくて済むよう data-tab とパネルidの対応で回す
+    for (const p of document.querySelectorAll('.panel[id^="tab-"]')) {
+      p.style.display = p.id === `tab-${btn.dataset.tab}` ? 'block' : 'none';
+    }
     if (btn.dataset.tab === 'plan') renderPlan();
   });
 }
@@ -697,4 +700,5 @@ function installLearnHook() {
   renderColPanel();
   render();
   refreshSnapshots();
+  initScouterUI({ toast, copyText });
 })();

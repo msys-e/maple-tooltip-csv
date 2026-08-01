@@ -166,7 +166,7 @@ td.del { color: var(--red); text-align: center; opacity: .35; }
 td.del:hover { opacity: 1; }
 
 #empty-hint { color: var(--ink-dim); padding: 26px; text-align: center; line-height: 2; }
-#empty-hint kbd {
+#empty-hint kbd, .sc-steps kbd {
   font-family: var(--mono); background: var(--bg2); border: 1px solid var(--panel-edge);
   border-radius: 3px; padding: 1px 6px; font-size: 12px;
 }
@@ -183,6 +183,76 @@ td.del:hover { opacity: 1; }
 #plan-wrap td.rank { color: var(--star); font-weight: 700; text-align: right; }
 #plan-wrap td.mps { font-weight: 700; }
 #plan-wrap td.cur { color: var(--ink-dim); font-size: 11.5px; }
+
+/* スカウター連携タブ */
+.sc-intro { line-height: 1.9; margin-bottom: 14px; }
+.sc-dim { color: var(--ink-dim); font-size: 12px; }
+.sc-intro a, .sc-steps a { color: var(--cyan); }
+
+.sc-group { margin-bottom: 14px; }
+.sc-group h3 {
+  font-family: 'DotGothic16', monospace; font-size: 13px; letter-spacing: 1px;
+  color: var(--star); border-bottom: 1px solid var(--panel-edge);
+  padding-bottom: 4px; margin-bottom: 8px;
+}
+.sc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 6px 12px; }
+.sc-field { display: flex; align-items: center; gap: 8px; }
+.sc-label { flex: 1; font-size: 12px; color: var(--ink-dim); line-height: 1.4; }
+.sc-label em { color: var(--panel-edge); font-style: normal; }
+.sc-field input { width: 84px; font-family: var(--mono); text-align: right; }
+.sc-field input:focus { outline: none; border-color: var(--star); }
+
+.sc-actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: 16px 0 6px; }
+
+#scouter-out {
+  background: var(--bg2); border: 1px solid var(--panel-edge); border-radius: 6px;
+  padding: 12px; margin-bottom: 16px;
+}
+.sc-out-head { font-family: 'DotGothic16', monospace; font-size: 13px; color: var(--star); margin-bottom: 8px; }
+.sc-out-head .sc-dim { margin-left: 8px; }
+.sc-linkrow { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.sc-bmlink {
+  display: inline-block; cursor: grab; text-decoration: none;
+  font-family: 'DotGothic16', monospace; font-size: 14px; letter-spacing: 1px;
+  color: #23232e; background: linear-gradient(#ffd633, var(--star));
+  border: 1px solid #fff0a0; border-radius: 5px; padding: 9px 18px;
+  box-shadow: 0 0 12px rgba(240,192,0,.35);
+}
+.sc-bmlink:active { cursor: grabbing; transform: translateY(1px); }
+.sc-diff {
+  font-family: var(--mono); font-size: 11.5px; color: var(--ink-dim);
+  margin-top: 10px; word-break: break-all; line-height: 1.7;
+}
+
+.sc-guide { border-top: 1px dashed var(--panel-edge); padding-top: 14px; }
+.sc-guide h3 { font-family: 'DotGothic16', monospace; font-size: 14px; color: var(--star); margin-bottom: 10px; }
+.sc-figure { position: relative; width: 320px; max-width: 100%; margin: 0 0 14px 4px; }
+.sc-browser { border: 1px solid var(--panel-edge); border-radius: 5px; overflow: hidden; background: #1c1c26; }
+.sc-chrome { display: flex; align-items: center; gap: 5px; background: #3a3a4c; padding: 5px 8px; }
+.sc-chrome i { width: 8px; height: 8px; border-radius: 50%; background: var(--panel-edge); }
+.sc-url {
+  flex: 1; margin-left: 6px; background: #23232e; border-radius: 9px;
+  font-family: var(--mono); font-size: 9.5px; color: var(--ink-dim); padding: 2px 8px;
+}
+.sc-bmbar { display: flex; gap: 6px; align-items: center; background: #33334a; padding: 4px 8px; }
+.sc-bm { font-size: 9.5px; color: var(--ink-dim); padding: 2px 6px; border-radius: 3px; white-space: nowrap; }
+.sc-drop { border: 1px dashed var(--star); color: var(--star); animation: pulse 1.6s infinite; }
+.sc-page {
+  height: 46px; display: flex; align-items: center; justify-content: center;
+  font-family: var(--mono); font-size: 11px; color: var(--panel-edge);
+}
+.sc-arrow { position: absolute; left: 158px; top: 46px; color: var(--star); font-size: 16px; line-height: 1; }
+.sc-chip {
+  position: absolute; left: 118px; top: 64px;
+  font-family: 'DotGothic16', monospace; font-size: 10.5px;
+  color: #23232e; background: var(--star); border-radius: 4px; padding: 3px 8px;
+  box-shadow: 0 3px 10px rgba(0,0,0,.5);
+}
+
+.sc-steps { margin: 0 0 12px 20px; line-height: 2; }
+.sc-steps li { margin-bottom: 4px; }
+.sc-note { color: var(--ink-dim); font-size: 12px; line-height: 1.9; }
+.sc-note b { color: var(--ink); }
 
 /* トースト */
 #toasts { position: fixed; right: 18px; bottom: 18px; display: flex; flex-direction: column; gap: 8px; z-index: 50; }
