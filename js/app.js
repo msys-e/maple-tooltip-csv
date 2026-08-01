@@ -320,6 +320,13 @@ function loadStoredFlameSettings() {
 }
 let flameSettings = loadStoredFlameSettings();
 $('plan-stat').value = flameSettings.mainStat;
+let planAllSteps = store.loadPlanAllSteps();
+$('plan-all-steps').checked = planAllSteps;
+$('plan-all-steps').addEventListener('change', () => {
+  planAllSteps = $('plan-all-steps').checked;
+  store.savePlanAllSteps(planAllSteps);
+  renderEnhancePlan();
+});
 
 for (const btn of document.querySelectorAll('.tab-btn')) {
   btn.addEventListener('click', () => {
@@ -413,8 +420,12 @@ function renderEnhancePlan() {
     return;
   }
   const mainStat = $('plan-stat').value;
-  const plan = buildPlan(items, rankingTable, mainStat);
-  $('plan-summary').textContent = `対象 ${new Set(plan.map((p) => p.item)).size} 装備 / ${plan.length} アクション (メソ/スコア効率順)`;
+  const plan = buildPlan(items, rankingTable, mainStat, { includeFuture: planAllSteps });
+  const mode = planAllSteps
+    ? `全段階 / 今できる ${plan.filter((p) => p.immediate).length} 件`
+    : '今できる一手のみ';
+  $('plan-summary').textContent =
+    `対象 ${new Set(plan.map((p) => p.item)).size} 装備 / ${plan.length} アクション (メソ/スコア効率順・${mode})`;
   if (!plan.length) {
     wrap.innerHTML = '<div style="color:var(--ink-dim);padding:20px">適用可能な強化がありません(装備一覧タブで装備を取り込んでください)</div>';
     $('plan-notes').textContent = '';
@@ -424,12 +435,15 @@ function renderEnhancePlan() {
   plan.forEach((p, i) => {
     const it = p.item, r = p.row;
     const cur = r.kind === 'star' ? `★${it.star_count}` : potSummary(it);
-    html += `<tr>` +
+    // 全段階モードでは「今すぐ実行できる行」と「先の段階」を見分けられるようにする
+    const future = p.immediate === false;
+    const badge = future ? '<span class="plan-later">先</span>' : '';
+    html += `<tr${future ? ' class="plan-future"' : ''}>` +
       `<td class="rank">${i + 1}</td>` +
       `<td class="name" data-v="${esc(it.item_name)}">${esc(it.item_name)}</td>` +
       `<td data-v="${esc(partOf(it.equip_type) ?? '')}">${esc(partOf(it.equip_type) ?? '')} Lv${nearestLv(it.req_level_base ?? it.req_level)}</td>` +
       `<td class="cur">${esc(cur)}</td>` +
-      `<td data-v="${esc(r.item)}">${esc(r.item)}</td>` +
+      `<td data-v="${esc(r.item)}">${badge}${esc(r.item)}</td>` +
       `<td data-v="${esc(r.setting)}">${esc(r.setting)}</td>` +
       `<td data-v="${r.meso}">${r.meso}</td>` +
       `<td data-v="${r.score}">${r.score}</td>` +
@@ -448,7 +462,10 @@ function renderEnhancePlan() {
     const lv = it.req_level_base ?? it.req_level;
     return Number.isFinite(lv) && !TABLE_LVS.includes(lv);
   }) ? '※表にないLvの装備は最寄りのLv(120→100、140→150等)に丸めて評価しています' : '';
-  $('plan-notes').innerHTML = [lvNote, notes.length ? `対象外: ${notes.map(esc).join(' ／ ')}` : '']
+  const modeNote = planAllSteps
+    ? '※「先」付きは今すぐ実行できない先の段階です。同じ装備で目標が両立しない行(主ステ%含む/除く、攻撃%/攻撃%orボス等)も並びます'
+    : '';
+  $('plan-notes').innerHTML = [lvNote, modeNote, notes.length ? `対象外: ${notes.map(esc).join(' ／ ')}` : '']
     .filter(Boolean).join('<br>');
 }
 

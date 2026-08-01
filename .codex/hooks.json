@@ -1,0 +1,1 @@
+{"hooks":{"Stop":[{"matcher":"","hooks":[{"type":"command","command":"'/c/Users/MM/.agents/skills/agmsg/scripts/check-inbox.sh' 'codex' '/h/maple-tooltip-csv'"}]}]}}

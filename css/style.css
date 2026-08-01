@@ -183,6 +183,13 @@ td.del:hover { opacity: 1; }
 #plan-wrap td.rank { color: var(--star); font-weight: 700; text-align: right; }
 #plan-wrap td.mps { font-weight: 700; }
 #plan-wrap td.cur { color: var(--ink-dim); font-size: 11.5px; }
+/* 全段階モードで「今すぐは実行できない先の段階」を落として見せる */
+#plan-wrap tr.plan-future td { opacity: .62; }
+#plan-wrap .plan-later {
+  display: inline-block; margin-right: 6px; padding: 0 5px; border-radius: 3px;
+  font-size: 10.5px; color: var(--bg2); background: var(--ink-dim); vertical-align: 1px;
+}
+.plan-toggle { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; cursor: pointer; }
 
 /* スカウター連携タブ */
 .sc-intro { line-height: 1.9; margin-bottom: 14px; }
