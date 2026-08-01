@@ -2,3 +2,4 @@ test/out/
 node_modules/
 temp/
 _codex_*
+.codex/
