@@ -6,6 +6,12 @@ import { aHash, hammingHex } from './imgproc.js';
 const POLL_MS = 220;
 const STABLE_COUNT = 2; // 同一ハッシュがこの回数連続したら確定
 
+const ERR_MSG = {
+  not_found: '検出待ち',
+  clipped: '画面端で欠けています',
+  bad_width: '幅が想定外(295-365px)',
+};
+
 export class CaptureController {
   // cb: { onState(text, live), onInfo({res,tip}), onTooltip(img, bbox, canvas) }
   constructor(cb) {
@@ -18,6 +24,25 @@ export class CaptureController {
     this.lastHash = null;
     this.stableN = 0;
     this.processed = []; // {ah, size} 処理済み(ハミング許容つき照合)
+    this.detector = null;  // null = 既定の装備ツールチップ検出
+    this.hashSkipTop = 0;
+  }
+
+  // 装備ツールチップ以外(STATウィンドウ等)を拾いたいときに検出関数を差し替える。
+  // fn(img) の戻り値契約は findTooltip と同一: {x,y,w,h} または {error, bbox?}
+  //   hashSkipTop: 安定判定のハッシュから除外する上端px(アニメする帯がある場合のみ)
+  // 検出対象が変わると processed の照合も無意味になるのでリセットする
+  setDetector(fn, { hashSkipTop = 0 } = {}) {
+    this.detector = fn || null;
+    this.hashSkipTop = fn ? hashSkipTop : 0;
+    this.resetProcessed();
+  }
+
+  // 同じ画面をもう一度取り込みたいとき(取り込みステップの切り替え時など)に呼ぶ
+  resetProcessed() {
+    this.processed = [];
+    this.lastHash = null;
+    this.stableN = 0;
   }
 
   _isProcessed(ah, size) {
@@ -58,11 +83,12 @@ export class CaptureController {
     this.ctx.drawImage(v, 0, 0);
     const img = this.ctx.getImageData(0, 0, this.canvas.width, this.canvas.height);
     this.lastFrame = img; // 診断保存用
-    const found = findTooltip(img);
+    const found = (this.detector || findTooltip)(img);
     const info = { res: `${img.width}x${img.height}` };
     if (found.error) {
       const size = found.bbox ? ` [検出${found.bbox.w}x${found.bbox.h}]` : '';
-      info.tip = ({ not_found: '検出待ち', clipped: '画面端で欠けています', bad_width: '幅が想定外(295-365px)' }[found.error]) + size;
+      // 差し替えた検出関数が独自のエラーコードを返したらそのまま出す
+      info.tip = (ERR_MSG[found.error] || found.error) + size;
       this.lastHash = null;
       this.stableN = 0;
       this.cb.onInfo(info);
@@ -72,7 +98,9 @@ export class CaptureController {
     // 処理済みキーには矩形サイズも含める(aHash衝突で別アイテムが握り潰されるのを軽減)
     // ★23以上の星キラキラはアニメーションして毎フレーム変わるため、
     // ハッシュ対象は星帯を除いた下側(テキスト領域)に限定する
-    const skip = Math.min(120, Math.floor(found.h / 3));
+    const skip = this.detector
+      ? Math.min(this.hashSkipTop, Math.max(0, found.h - 8))
+      : Math.min(120, Math.floor(found.h / 3));
     const stableRegion = { x: found.x, y: found.y + skip, w: found.w, h: found.h - skip };
     const ah = aHash(img, stableRegion);
     // 本文領域に流れてきたキラキラ粒子で数ビット揺れても「同一」とみなす

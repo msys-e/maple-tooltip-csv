@@ -4,6 +4,7 @@
 //   node test/run.mjs ocr            辞書で全行認識し golden と比較
 //   node test/run.mjs parse          パース結果を golden CSV(json) と比較
 //   node test/run.mjs scouter        maplescouter連携(差分生成・ブックマークレット)の単体テスト
+//   node test/run.mjs parsestat      STAT画面のラベル→キー変換の単体テスト(画像不要)
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { decodePNG, writeBMP } from './png.mjs';
 import { findTooltip, countStars } from '../js/detect.js';
@@ -11,7 +12,8 @@ import { segmentLines } from '../js/segment.js';
 import { GlyphBank, recognizeLines } from '../js/ocr.js';
 import { parseTooltip } from '../js/parse.js';
 import { itemToRow, COLUMNS } from '../js/csv.js';
-import { buildDiff, applyDiff, buildBookmarklet, PRESET_KEY } from '../js/scouter.js';
+import { buildDiff, applyDiff, buildBookmarklet, PRESET_KEY, SCOUTER_FIELDS } from '../js/scouter.js';
+import { parseStatWindow, parseStatPopup, STAT_LABELS, numbersIn } from '../js/parsestat.js';
 
 const SAMPLES = [
   'berserked', 'dawn_ring', 'genesis_sword', 'full_daybreak', 'full_mitra',
@@ -253,6 +255,78 @@ if (cmd === 'dump') {
   }
   writeBMP(`${OUT}${name}_L${lineNo}.bmp`, big);
   console.log(`wrote ${OUT}${name}_L${lineNo}.bmp`);
+}
+
+if (cmd === 'parsestat') {
+  let pass = 0, fail = 0;
+  const ok = (cond, msg) => { if (cond) { pass++; } else { fail++; console.log(` NG ${msg}`); } };
+  const eq = (got, want, msg) => ok(
+    JSON.stringify(got) === JSON.stringify(want),
+    `${msg}\n   got : ${JSON.stringify(got)}\n   want: ${JSON.stringify(want)}`,
+  );
+  const vals = (lines) => parseStatWindow(lines).values;
+
+  // --- ラベル表とフォーム定義の整合(ここがズレると取り込んでもフォームに入らない) ---
+  const fieldKeys = new Set(SCOUTER_FIELDS.map((f) => f.key));
+  for (const { key } of STAT_LABELS) ok(fieldKeys.has(key), `STAT_LABELS の ${key} が SCOUTER_FIELDS に無い`);
+  for (const k of ['coolTimeReduce', 'coolTimeReducePercent']) ok(fieldKeys.has(k), `${k} が SCOUTER_FIELDS に無い`);
+
+  // --- 数値抽出 ---
+  eq(numbersIn('1,320').map((x) => x.value), [1320], 'カンマ区切り');
+  eq(numbersIn('85.5%').map((x) => [x.value, x.pct]), [[85.5, true]], '小数と%フラグ');
+  eq(numbersIn('ARCANE FORCE').length, 0, '数値なし行');
+
+  // --- STATウィンドウ ---
+  eq(vals(['DAMAGE 55%']), { dmg: 55 }, '基本のラベル+値');
+  eq(vals(['BOSS DAMAGE 342%']), { bossDmg: 342 }, 'BOSS DAMAGE が DAMAGE に食われない');
+  eq(vals(['DAMAGE TO NORMAL MONSTERS 32%']), { normalDmg: 32 }, '長いラベル優先(前方一致の食い合い防止)');
+  eq(vals(['lGNORE DEFENSE 92%']), { ignoreDef: 92 }, 'OCRのI/l揺れを吸収');
+  eq(vals(['CRITICAL DAMAGE 85.5%']), { criticalDmg: 85.5 }, '小数が壊れない(正規化で.を落とさない)');
+  eq(vals(['ARCANE FORCE 1,320']), { arcaneForce: 1320 }, 'カンマ区切りの整数');
+  eq(vals(['SACRED POWER 550']), { authenticForce: 550 }, 'GMS表記ゆれ(別名)');
+  eq(vals(['CRITICAL DAMAGE 85% (+15%)']), { criticalDmg: 85 }, '内訳付きは先頭の値を採る');
+  eq(vals(['BUFF DURATION', '45%']), { buffDuration: 45 }, '値が次行に回るレイアウト');
+  eq(vals(['BUFF DURATION', 'CRITICAL RATE 100%']), { critical: 100 }, '次行が別ラベルなら値として吸わない');
+
+  // --- クールタイム減少の2値分解 ---
+  eq(vals(['COOLDOWN REDUCTION -2 sec, -5%']), { coolTimeReduce: 2, coolTimeReducePercent: 5 },
+    'sec と % を1行から分解(符号は絶対値)');
+  eq(vals(['COOLDOWN REDUCTION 0 sec, 10%']), { coolTimeReduce: 0, coolTimeReducePercent: 10 }, '0秒でもキーを作る');
+
+  // --- 未取得・未知行の扱い ---
+  eq(vals(['BOSS DAMAGE']), {}, '値が無いラベル行はキーを作らない(フォームは空欄のまま)');
+  const mixed = parseStatWindow(['DAMAGE 55%', 'HONOR EXP 12,345', '']);
+  eq(mixed.values, { dmg: 55 }, '未知行があっても既知だけ取る');
+  eq(mixed.unknownLines, ['HONOR EXP 12,345'], '未知行を返す(空行は含めない)');
+
+  // --- recognizeLines形式({text}) でも通る ---
+  eq(vals([{ text: 'DAMAGE 55%' }]), { dmg: 55 }, '{text}オブジェクト形式');
+
+  // --- 一括: 実画面を想定した行の並び ---
+  eq(vals([
+    'DAMAGE 55%', 'BOSS DAMAGE 342%', 'IGNORE DEFENSE 92%',
+    'CRITICAL RATE 100%', 'CRITICAL DAMAGE 85%', 'BUFF DURATION 45%',
+    'COOLDOWN REDUCTION -2 sec, -5%', 'ARCANE FORCE 1,320',
+  ]), {
+    dmg: 55, bossDmg: 342, ignoreDef: 92, critical: 100, criticalDmg: 85,
+    buffDuration: 45, coolTimeReduce: 2, coolTimeReducePercent: 5, arcaneForce: 1320,
+  }, 'STATウィンドウ一括');
+
+  // --- ポップアップ(base / % / 固定加算) ---
+  // ★実ポップアップの行構成は未確認。ここで固定しているのは「%付きを増加率、
+  //   残りを出現順に素→固定」という暫定ルールの挙動であって、実画面の正解ではない。
+  //   フィクスチャ採取後にこの期待値ごと見直すこと。
+  eq(parseStatPopup(['INT 12,345', '(4,200 + 320% + 1,850)'], 'mainStat').values,
+    { mainStatBase: 12345, mainStatPer: 320, mainStatAbs: 4200 },
+    '[暫定] メインステ: %付き=増加率、残りは出現順');
+  eq(parseStatPopup(['ATT 2,340', '(890 + 120% + 450)'], 'atk').values,
+    { atkBase: 2340, atkPercent: 120, atkAbs: 890 },
+    '[暫定] 攻撃力はキー名が atkBase/atkPercent/atkAbs');
+  eq(parseStatPopup(['LUK 999'], 'subStat').values, { subStatBase: 999 }, '数値が1つだけでも落ちない');
+  eq(parseStatPopup(['なにか'], 'unknown').values, {}, '対象不明なら何も返さない');
+
+  console.log(`\nparsestat: pass=${pass} fail=${fail}`);
+  process.exitCode = fail ? 1 : 0;
 }
 
 if (cmd === 'scouter') {
