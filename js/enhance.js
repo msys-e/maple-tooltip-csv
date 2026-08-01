@@ -1,6 +1,7 @@
 // 強化プラン: ranking.csv(強化効率表)と取り込み装備を突き合わせ、
 // 「次に強化すべきアクション」をメソ/スコア効率順に並べる
 export const TABLE_LVS = [100, 150, 160, 200, 250];
+export const CUBE_SALE_DISCOUNT = 0.25;
 
 export function nearestLv(lv) {
   if (!Number.isFinite(lv)) return null;
@@ -133,15 +134,35 @@ export function applicable(item, row, mainStat) {
   return false;
 }
 
-// プラン構築: 全装備×全行の適用可能ペアを効率順に
-export function buildPlan(items, table, mainStat) {
+// 表の元値を保ったまま、表示・並べ替えに使う実効コストを返す。
+// キューブセールは潜在行だけが対象で、スターフォース行には適用しない。
+export function effectivePlanCost(row, { cubeSale = false } = {}) {
+  const discounted = cubeSale && row.kind === 'pot' && /キューブ/.test(row.setting || '');
+  const multiplier = discounted ? 1 - CUBE_SALE_DISCOUNT : 1;
+  const meso = row.meso * multiplier;
+  // ranking.csv の mps は小数2桁へ丸め済み。割引時は二重丸めを避けるため
+  // 割引後メソとスコアから再計算する。
+  const mps = discounted && Number.isFinite(row.score) && row.score > 0
+    ? meso * 1000 / row.score
+    : row.mps;
+  return {
+    meso,
+    mps,
+    discounted,
+  };
+}
+
+// プラン構築: 全装備×全行の適用可能ペアを実効コスト順に
+export function buildPlan(items, table, mainStat, options = {}) {
   const plan = [];
   for (const item of items) {
     for (const row of table) {
-      if (applicable(item, row, mainStat)) plan.push({ item, row });
+      if (applicable(item, row, mainStat)) {
+        plan.push({ item, row, ...effectivePlanCost(row, options) });
+      }
     }
   }
-  plan.sort((a, b) => a.row.mps - b.row.mps);
+  plan.sort((a, b) => a.mps - b.mps);
   return plan;
 }
 
