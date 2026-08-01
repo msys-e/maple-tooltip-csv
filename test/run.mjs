@@ -5,6 +5,7 @@
 //   node test/run.mjs parse          パース結果を golden CSV(json) と比較
 //   node test/run.mjs scouter        maplescouter連携(差分生成・ブックマークレット)の単体テスト
 //   node test/run.mjs parsestat      STAT画面のラベル→キー変換の単体テスト(画像不要)
+//   node test/run.mjs statdetect     STAT画面/ポップアップの矩形検出と行分割の回帰
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
 import { decodePNG, writeBMP } from './png.mjs';
 import { findTooltip, countStars } from '../js/detect.js';
@@ -14,6 +15,7 @@ import { parseTooltip } from '../js/parse.js';
 import { itemToRow, COLUMNS } from '../js/csv.js';
 import { buildDiff, applyDiff, buildBookmarklet, PRESET_KEY, SCOUTER_FIELDS } from '../js/scouter.js';
 import { parseStatWindow, parseStatPopup, STAT_LABELS, numbersIn } from '../js/parsestat.js';
+import { findStatWindow, findStatPopup } from '../js/detectstat.js';
 
 const SAMPLES = [
   'berserked', 'dawn_ring', 'genesis_sword', 'full_daybreak', 'full_mitra',
@@ -257,6 +259,42 @@ if (cmd === 'dump') {
   console.log(`wrote ${OUT}${name}_L${lineNo}.bmp`);
 }
 
+if (cmd === 'statdetect') {
+  let pass = 0, fail = 0;
+  const ok = (cond, msg) => { if (cond) { pass++; } else { fail++; console.log(` NG ${msg}`); } };
+  const eq = (got, want, msg) => ok(
+    JSON.stringify(got) === JSON.stringify(want),
+    `${msg}\n   got : ${JSON.stringify(got)}\n   want: ${JSON.stringify(want)}`,
+  );
+  const load = (name) => decodePNG(`${ROOT}test/fixtures/${name}.png`);
+
+  // フィクスチャは 1922x1232 のフレームから (540,340) を原点に切り出したもの。
+  // 期待矩形はテンプレ採取時の実測値で、UI位置が動いてもアンカー追従で同じ大きさになる
+  const WIN = { x: 238, y: 191, w: 436, h: 254 };
+  for (const name of ['stat_window', 'stat_window_b']) {
+    const img = load(name);
+    eq(findStatWindow(img), WIN, `${name}: STATウィンドウ矩形`);
+    eq(findStatPopup(img), { error: 'not_found' }, `${name}: ポップアップは無い`);
+    // 行分割: 上段8行(DAMAGE RANGE〜ADDITIONAL STATUS DAMAGE) + 下段3行
+    const lines = segmentLines(crop(img, findStatWindow(img)));
+    eq(lines.length, 11, `${name}: 11行に分割される`);
+    ok(lines.every((l) => l.glyphs.length >= 20), `${name}: 各行に十分なグリフがある`);
+  }
+
+  const pop = load('stat_popup_matt');
+  eq(findStatPopup(pop), { x: 426, y: 459, w: 180, h: 38 }, 'ポップアップ [Applied Value] 直後2行の矩形');
+  const popLines = segmentLines(crop(pop, findStatPopup(pop)));
+  eq(popLines.length, 2, 'ポップアップは2行(Base Value / % Value)');
+
+  // 誤検出しないこと: 装備ツールチップのサンプルにはどちらのアンカーも無い
+  const tip = decodePNG(`${ROOT}samples/berserked.png`);
+  eq(findStatWindow(tip), { error: 'not_found' }, '装備ツールチップをSTATウィンドウと誤検出しない');
+  eq(findStatPopup(tip), { error: 'not_found' }, '装備ツールチップをポップアップと誤検出しない');
+
+  console.log(`\nstatdetect: pass=${pass} fail=${fail}`);
+  process.exitCode = fail ? 1 : 0;
+}
+
 if (cmd === 'parsestat') {
   let pass = 0, fail = 0;
   const ok = (cond, msg) => { if (cond) { pass++; } else { fail++; console.log(` NG ${msg}`); } };
@@ -274,56 +312,75 @@ if (cmd === 'parsestat') {
   // --- 数値抽出 ---
   eq(numbersIn('1,320').map((x) => x.value), [1320], 'カンマ区切り');
   eq(numbersIn('85.5%').map((x) => [x.value, x.pct]), [[85.5, true]], '小数と%フラグ');
-  eq(numbersIn('ARCANE FORCE').length, 0, '数値なし行');
+  eq(numbersIn('ARCANE POWER').length, 0, '数値なし行');
 
-  // --- STATウィンドウ ---
-  eq(vals(['DAMAGE 55%']), { dmg: 55 }, '基本のラベル+値');
-  eq(vals(['BOSS DAMAGE 342%']), { bossDmg: 342 }, 'BOSS DAMAGE が DAMAGE に食われない');
-  eq(vals(['DAMAGE TO NORMAL MONSTERS 32%']), { normalDmg: 32 }, '長いラベル優先(前方一致の食い合い防止)');
-  eq(vals(['lGNORE DEFENSE 92%']), { ignoreDef: 92 }, 'OCRのI/l揺れを吸収');
-  eq(vals(['CRITICAL DAMAGE 85.5%']), { criticalDmg: 85.5 }, '小数が壊れない(正規化で.を落とさない)');
-  eq(vals(['ARCANE FORCE 1,320']), { arcaneForce: 1320 }, 'カンマ区切りの整数');
-  eq(vals(['SACRED POWER 550']), { authenticForce: 550 }, 'GMS表記ゆれ(別名)');
-  eq(vals(['CRITICAL DAMAGE 85% (+15%)']), { criticalDmg: 85 }, '内訳付きは先頭の値を採る');
-  eq(vals(['BUFF DURATION', '45%']), { buffDuration: 45 }, '値が次行に回るレイアウト');
-  eq(vals(['BUFF DURATION', 'CRITICAL RATE 100%']), { critical: 100 }, '次行が別ラベルなら値として吸わない');
+  // --- 実画面の行(test/fixtures/stat_window.png の見たまま) ---
+  // 2カラムなので1行に「左ラベル 左値 右ラベル 右値」が並ぶ
+  eq(vals(['DAMAGE RANGE 126,517,810 DAMAGE 71.00%']), { dmg: 71 },
+    '左のDAMAGE RANGEは無視し、右のDAMAGEだけ拾う(食い合い防止)');
+  eq(vals(['FINAL DAMAGE 169.92% BOSS DAMAGE 482.00%']), { bossDmg: 482 },
+    'FINAL DAMAGEは対象外、BOSS DAMAGEのみ');
+  eq(vals(['IGNORE DEFENSE 96.85% NORMAL ENEMY DAMAGE 12.00%']),
+    { ignoreDef: 96.85, normalDmg: 12 }, '1行から2キー(小数も保持)');
+  eq(vals(['ATTACK POWER 7,081 CRITICAL RATE 90%']), { critical: 90 },
+    'ATTACK POWERの値が CRITICAL RATE に流れ込まない');
+  eq(vals(['MAGIC ATT 2,673 CRITICAL DAMAGE 113.65%']), { criticalDmg: 113.65 }, 'MAGIC ATTは対象外');
+  eq(vals(['COOLDOWN REDUCTION 4 sec / 5% BUFF DURATION 30%']),
+    { coolTimeReduce: 4, coolTimeReducePercent: 5, buffDuration: 30 },
+    'sec と % を分解しつつ、右のBUFF DURATIONも取る');
+  eq(vals(['COOLDOWN NOT APPLIED 7.50% IGNORE ELEMENTAL RESISTANCE 5.00%']),
+    { resetCoolDown: 7.5, ignoreElementalResist: 5 }, 'クールタイム未適用=リセット率');
+  eq(vals(['ADDITIONAL STATUS DAMAGE 23.00% SUMMONS DURATION INCREASE 10%']),
+    { statusAdditionalDmg: 23, summonPersistTime: 10 }, '状態異常追加ダメージ/召喚獣持続');
+  eq(vals(['ITEM DROP RATE 22% ARCANE POWER 1,360']), { arcaneForce: 1360 }, 'アーケインフォース');
+  eq(vals(['ADDITIONAL EXP OBTAINED 222.00% SACRED POWER 760']), { authenticForce: 760 },
+    'オーセンティックフォース(GMS表記はSACRED POWER)');
+  eq(vals(['MESOS OBTAINED 656% STAR FORCE 412']), {}, '対象外だけの行は何も取らない');
 
-  // --- クールタイム減少の2値分解 ---
-  eq(vals(['COOLDOWN REDUCTION -2 sec, -5%']), { coolTimeReduce: 2, coolTimeReducePercent: 5 },
-    'sec と % を1行から分解(符号は絶対値)');
-  eq(vals(['COOLDOWN REDUCTION 0 sec, 10%']), { coolTimeReduce: 0, coolTimeReducePercent: 10 }, '0秒でもキーを作る');
+  // --- OCRの癖 ---
+  eq(vals(['lGNORE DEFENSE 96.85% NORMAL ENEMY DAMAGE 12.00%']),
+    { ignoreDef: 96.85, normalDmg: 12 }, 'OCRのI/l揺れを吸収');
+  eq(vals(['CRITICALDAMAGE 113.65%']), { criticalDmg: 113.65 }, '語間スペースが落ちても拾う');
 
   // --- 未取得・未知行の扱い ---
   eq(vals(['BOSS DAMAGE']), {}, '値が無いラベル行はキーを作らない(フォームは空欄のまま)');
-  const mixed = parseStatWindow(['DAMAGE 55%', 'HONOR EXP 12,345', '']);
+  const mixed = parseStatWindow(['DAMAGE RANGE 1 DAMAGE 55%', 'HONOR EXP 12,345', '']);
   eq(mixed.values, { dmg: 55 }, '未知行があっても既知だけ取る');
   eq(mixed.unknownLines, ['HONOR EXP 12,345'], '未知行を返す(空行は含めない)');
 
   // --- recognizeLines形式({text}) でも通る ---
-  eq(vals([{ text: 'DAMAGE 55%' }]), { dmg: 55 }, '{text}オブジェクト形式');
+  eq(vals([{ text: 'BOSS DAMAGE 482.00%' }]), { bossDmg: 482 }, '{text}オブジェクト形式');
 
-  // --- 一括: 実画面を想定した行の並び ---
+  // --- 一括: フィクスチャの11行をそのまま ---
   eq(vals([
-    'DAMAGE 55%', 'BOSS DAMAGE 342%', 'IGNORE DEFENSE 92%',
-    'CRITICAL RATE 100%', 'CRITICAL DAMAGE 85%', 'BUFF DURATION 45%',
-    'COOLDOWN REDUCTION -2 sec, -5%', 'ARCANE FORCE 1,320',
+    'DAMAGE RANGE 126,517,810 DAMAGE 71.00%',
+    'FINAL DAMAGE 169.92% BOSS DAMAGE 482.00%',
+    'IGNORE DEFENSE 96.85% NORMAL ENEMY DAMAGE 12.00%',
+    'ATTACK POWER 7,081 CRITICAL RATE 90%',
+    'MAGIC ATT 2,673 CRITICAL DAMAGE 113.65%',
+    'COOLDOWN REDUCTION 4 sec / 5% BUFF DURATION 30%',
+    'COOLDOWN NOT APPLIED 7.50% IGNORE ELEMENTAL RESISTANCE 5.00%',
+    'ADDITIONAL STATUS DAMAGE 23.00% SUMMONS DURATION INCREASE 10%',
+    'MESOS OBTAINED 656% STAR FORCE 412',
+    'ITEM DROP RATE 22% ARCANE POWER 1,360',
+    'ADDITIONAL EXP OBTAINED 222.00% SACRED POWER 760',
   ]), {
-    dmg: 55, bossDmg: 342, ignoreDef: 92, critical: 100, criticalDmg: 85,
-    buffDuration: 45, coolTimeReduce: 2, coolTimeReducePercent: 5, arcaneForce: 1320,
-  }, 'STATウィンドウ一括');
+    dmg: 71, bossDmg: 482, ignoreDef: 96.85, normalDmg: 12, critical: 90, criticalDmg: 113.65,
+    coolTimeReduce: 4, coolTimeReducePercent: 5, buffDuration: 30,
+    resetCoolDown: 7.5, ignoreElementalResist: 5,
+    statusAdditionalDmg: 23, summonPersistTime: 10, arcaneForce: 1360, authenticForce: 760,
+  }, 'STATウィンドウ全11行 → 15キー');
 
-  // --- ポップアップ(base / % / 固定加算) ---
-  // ★実ポップアップの行構成は未確認。ここで固定しているのは「%付きを増加率、
-  //   残りを出現順に素→固定」という暫定ルールの挙動であって、実画面の正解ではない。
-  //   フィクスチャ採取後にこの期待値ごと見直すこと。
-  eq(parseStatPopup(['INT 12,345', '(4,200 + 320% + 1,850)'], 'mainStat').values,
-    { mainStatBase: 12345, mainStatPer: 320, mainStatAbs: 4200 },
-    '[暫定] メインステ: %付き=増加率、残りは出現順');
-  eq(parseStatPopup(['ATT 2,340', '(890 + 120% + 450)'], 'atk').values,
-    { atkBase: 2340, atkPercent: 120, atkAbs: 890 },
-    '[暫定] 攻撃力はキー名が atkBase/atkPercent/atkAbs');
-  eq(parseStatPopup(['LUK 999'], 'subStat').values, { subStatBase: 999 }, '数値が1つだけでも落ちない');
-  eq(parseStatPopup(['なにか'], 'unknown').values, {}, '対象不明なら何も返さない');
+  // --- ポップアップ([Applied Value] の2行。test/fixtures/stat_popup_matt.png の見たまま) ---
+  eq(parseStatPopup(['Base Value : 2546', '% Value : 5%'], 'atk').values,
+    { atkBase: 2546, atkPercent: 5 }, '攻撃力: Base Value と % Value');
+  eq(parseStatPopup(['Base Value : 12345', '% Value : 320%'], 'mainStat').values,
+    { mainStatBase: 12345, mainStatPer: 320 }, 'メインステ');
+  eq(parseStatPopup(['Base Value : 999', '% Value : 0%'], 'subStat').values,
+    { subStatBase: 999, subStatPer: 0 }, 'サブステ(0%でもキーを作る)');
+  eq(parseStatPopup(['Base Value : 2546'], 'atk').values, { atkBase: 2546 }, '%行が無くても落ちない');
+  eq(parseStatPopup(['Base Value : 2546', '% Value : 5%'], 'unknown').values, {}, '対象不明なら何も返さない');
+  eq(parseStatPopup(['なにか'], 'atk').unknownLines, ['なにか'], '想定外の行は報告する');
 
   console.log(`\nparsestat: pass=${pass} fail=${fail}`);
   process.exitCode = fail ? 1 : 0;
