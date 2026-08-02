@@ -294,6 +294,15 @@ td.del:hover { opacity: 1; }
 .sc-note b { color: var(--ink); }
 
 .plan-head { margin-bottom: 10px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+.plan-toggle[aria-pressed='true'] {
+  color: var(--bg); background: linear-gradient(#e6ff52, var(--lime)); border-color: var(--lime);
+  box-shadow: 0 0 12px rgba(204,240,0,.3);
+}
+#plan-wrap td.sale-cost { color: var(--lime); font-weight: 700; }
+.sale-badge {
+  display: inline-block; margin-left: 6px; padding: 1px 4px; border-radius: 3px;
+  color: var(--lime); border: 1px solid rgba(204,240,0,.45); font-size: 9px;
+}
 .flame-section {
   margin-top: 24px; padding-top: 18px;
   border-top: 1px solid var(--panel-edge);

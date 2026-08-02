@@ -1,6 +1,14 @@
+import assert from 'node:assert/strict';
 // planStep / buildPlan のユニットテスト (codexレビューの非blockingメモ対応)
 // 合成した効率表行×装備で star/potential 分岐の回帰を検知する
-import { planStep, buildPlan, partOf, nearestLv } from '../js/enhance.js';
+import {
+  CUBE_SALE_DISCOUNT,
+  buildPlan,
+  effectivePlanCost,
+  nearestLv,
+  partOf,
+  planStep,
+} from '../js/enhance.js';
 
 let pass = 0, fail = 0;
 function eq(label, got, want) {
@@ -72,6 +80,60 @@ eq('buildPlan includeFuture で future も',
   buildPlan(items, table, 'STR', { includeFuture: true }).length, 4);
 eq('buildPlan immediate フラグ',
   buildPlan(items, table, 'STR', { includeFuture: true }).filter((p) => p.immediate).length, 2);
+
+// --- キューブセール ---
+assert.equal(CUBE_SALE_DISCOUNT, 0.25);
+
+const potential = {
+  kind: 'pot', lv: 160, part: '武器', goal: '攻撃%2ライン', from: '1ライン',
+  setting: 'グローイングキューブ', meso: 4, score: 100, mps: 40,
+};
+const starforce = {
+  kind: 'star', lv: 160, s0: 0, s1: 18,
+  setting: '破壊防止なし', meso: 3.5, score: 100, mps: 35,
+};
+const nonCubePotential = { ...potential, setting: 'イベント配布', meso: 0, mps: 0 };
+
+assert.deepEqual(effectivePlanCost(potential), { meso: 4, mps: 40, discounted: false });
+assert.deepEqual(effectivePlanCost(potential, { cubeSale: true }), { meso: 3, mps: 30, discounted: true });
+assert.deepEqual(effectivePlanCost(starforce, { cubeSale: true }), { meso: 3.5, mps: 35, discounted: false });
+assert.deepEqual(effectivePlanCost(nonCubePotential, { cubeSale: true }), { meso: 0, mps: 0, discounted: false });
+
+// ranking.csv の mps は丸め済みなので、セール時は割引メソから効率を再計算する。
+// 旧実装の 120.2 * 0.75 = 90.15 だと、90.16のスタフォより誤って上位になっていた。
+const roundedPotential = { ...potential, meso: 11.975, score: 99.6, mps: 120.2 };
+const boundaryStarforce = { ...starforce, meso: 8.385, score: 93, mps: 90.16 };
+const roundedSaleCost = effectivePlanCost(roundedPotential, { cubeSale: true });
+assert.equal(roundedSaleCost.meso, 8.98125);
+assert.ok(Math.abs(roundedSaleCost.mps - 90.17319277108435) < 1e-12);
+
+const weapon = {
+  item_name: 'Test Weapon', equip_type: 'Weapon', req_level: 160, star_count: 0,
+  potential_grade: 'Legendary', pot1_text: 'Attack Power +12%', pot2_text: '', pot3_text: '',
+};
+const saleTable = [potential, starforce];
+const normal = buildPlan([weapon], saleTable, 'STR');
+const sale = buildPlan([weapon], saleTable, 'STR', { cubeSale: true });
+
+assert.deepEqual(normal.map((entry) => entry.row.kind), ['star', 'pot']);
+assert.deepEqual(sale.map((entry) => entry.row.kind), ['pot', 'star']);
+assert.deepEqual(sale.map((entry) => entry.mps), [30, 35]);
+
+const boundarySale = buildPlan([weapon], [roundedPotential, boundaryStarforce], 'STR', { cubeSale: true });
+assert.deepEqual(boundarySale.map((entry) => entry.row.kind), ['star', 'pot']);
+
+// 全段階表示とセールを同時に有効化しても、将来行と割引後コストをどちらも保持する。
+const futureSale = buildPlan(
+  [glove({ star_count: 18 })],
+  [
+    { ...starRow(200, 21, 22), meso: 5, score: 100, mps: 50 },
+    { ...inclRow, setting: 'ブライトキューブ', meso: 4, score: 100, mps: 40 },
+  ],
+  'STR',
+  { includeFuture: true, cubeSale: true },
+);
+assert.deepEqual(futureSale.map((entry) => entry.immediate), [true, false]);
+assert.deepEqual(futureSale.map((entry) => entry.mps), [30, 50]);
 
 console.log(`enhance: pass=${pass} fail=${fail}`);
 process.exitCode = fail ? 1 : 0;

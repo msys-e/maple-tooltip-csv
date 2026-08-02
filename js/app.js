@@ -553,6 +553,7 @@ $('char-table-wrap').addEventListener('click', (e) => {
 let rankingTable = [];
 let flameData = null;
 let flameDataState = 'loading';
+let cubeSaleEnabled = false;
 const DEFAULT_FLAME_SETTINGS = {
   settingsVersion: 2,
   mainStat: 'STR', secondaryStat: 'DEX', secondaryWeight: 0.1, allStatWeight: 10,
@@ -672,6 +673,12 @@ $('plan-stat').addEventListener('change', () => {
   renderPlan();
 });
 
+$('cube-sale-toggle').addEventListener('click', () => {
+  cubeSaleEnabled = !cubeSaleEnabled;
+  $('cube-sale-toggle').setAttribute('aria-pressed', String(cubeSaleEnabled));
+  renderEnhancePlan();
+});
+
 for (const id of ['flame-secondary-stat', 'flame-secondary-weight', 'flame-all-weight',
   'flame-attack-weight', 'flame-attack-type', 'flame-source-type']) {
   $(id).addEventListener('change', () => { readFlameControls(); renderFlamePlan(); });
@@ -712,12 +719,16 @@ function renderEnhancePlan() {
     return;
   }
   const mainStat = $('plan-stat').value;
-  const plan = buildPlan(items, rankingTable, mainStat, { includeFuture: planAllSteps });
+  const plan = buildPlan(items, rankingTable, mainStat, {
+    includeFuture: planAllSteps,
+    cubeSale: cubeSaleEnabled,
+  });
   const mode = planAllSteps
     ? `全段階 / 今できる ${plan.filter((p) => p.immediate).length} 件`
     : '今できる一手のみ';
+  const saleLabel = cubeSaleEnabled ? '・キューブセール25% OFF適用' : '';
   $('plan-summary').textContent =
-    `対象 ${new Set(plan.map((p) => p.item)).size} 装備 / ${plan.length} アクション (メソ/スコア効率順・${mode})`;
+    `対象 ${new Set(plan.map((p) => p.item)).size} 装備 / ${plan.length} アクション (メソ/スコア効率順・${mode}${saleLabel})`;
   if (!plan.length) {
     wrap.innerHTML = '<div style="color:var(--ink-dim);padding:20px">適用可能な強化がありません(装備一覧タブで装備を取り込んでください)</div>';
     $('plan-notes').textContent = '';
@@ -727,6 +738,8 @@ function renderEnhancePlan() {
   plan.forEach((p, i) => {
     const it = p.item, r = p.row;
     const cur = r.kind === 'star' ? `★${it.star_count}` : potSummary(it);
+    const meso = Number(p.meso.toFixed(3));
+    const mps = Number(p.mps.toFixed(2));
     // 全段階モードでは「今すぐ実行できる行」と「先の段階」を見分けられるようにする
     const future = p.immediate === false;
     const badge = future ? '<span class="plan-later">先</span>' : '';
@@ -736,10 +749,10 @@ function renderEnhancePlan() {
       `<td data-v="${esc(partOf(it.equip_type) ?? '')}">${esc(partOf(it.equip_type) ?? '')} Lv${nearestLv(it.req_level_base ?? it.req_level)}</td>` +
       `<td class="cur">${esc(cur)}</td>` +
       `<td data-v="${esc(r.item)}">${badge}${esc(r.item)}</td>` +
-      `<td data-v="${esc(r.setting)}">${esc(r.setting)}</td>` +
-      `<td data-v="${r.meso}">${r.meso}</td>` +
+      `<td data-v="${esc(r.setting)}">${esc(r.setting)}${p.discounted ? '<span class="sale-badge">25% OFF</span>' : ''}</td>` +
+      `<td class="${p.discounted ? 'sale-cost' : ''}" data-v="${meso}">${meso}</td>` +
       `<td data-v="${r.score}">${r.score}</td>` +
-      `<td class="mps" data-v="${r.mps}">${r.mps}</td></tr>`;
+      `<td class="mps ${p.discounted ? 'sale-cost' : ''}" data-v="${mps}">${mps}</td></tr>`;
   });
   html += '</tbody></table>';
   wrap.innerHTML = html;
