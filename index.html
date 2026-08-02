@@ -18,6 +18,14 @@
 </header>
 
 <div class="toolbar">
+  <label class="char-control">キャラ:
+    <select id="char-select"></select>
+  </label>
+  <label class="char-control">Class:
+    <input type="text" id="char-class" list="class-list" autocomplete="off">
+    <datalist id="class-list"></datalist>
+  </label>
+  <button id="btn-char-manage">管理…</button>
   <button id="btn-capture" class="primary">画面共有を開始</button>
   <button id="btn-csv">CSVダウンロード</button>
   <button id="btn-snapshot">スナップショット保存</button>
@@ -30,6 +38,8 @@
   <input type="file" id="import-file" accept=".json" hidden>
   <button id="btn-clear" class="danger">表をクリア</button>
 </div>
+
+<div id="char-warning" class="storage-warning" style="display:none"></div>
 
 <div id="unknown-banner">⚠ 未知の文字が <span id="unknown-count">0</span> 件あります — クリックしてラベル付け
   <button id="btn-unknown-frame" style="margin-left:12px;font-size:11px;padding:2px 8px">このフレームをPNG保存(診断用)</button>
@@ -120,6 +130,7 @@
         </select>
       </label>
       <button id="flame-reset" type="button">参考値へ戻す</button>
+      <span id="class-derived-note" class="class-derived-note"></span>
     </div>
     <div class="flame-reference-note">
       <button class="flame-reference-trigger" type="button" aria-describedby="flame-reference-tooltip">計算上の注意 <span aria-hidden="true">ⓘ</span></button>
@@ -248,6 +259,18 @@
 
 <div class="modal-back" id="zoom-back">
   <div class="modal"><img id="zoom-img" alt="tooltip"></div>
+</div>
+
+<div class="modal-back" id="char-back">
+  <div class="modal char-modal">
+    <h2>キャラ管理</h2>
+    <div id="char-storage-summary" class="char-summary"></div>
+    <div id="char-table-wrap"></div>
+    <div class="row">
+      <button id="btn-char-new" class="primary">新規キャラ</button>
+      <button id="btn-char-close">閉じる</button>
+    </div>
+  </div>
 </div>
 
 <div id="filter-menu" style="display:none"></div>

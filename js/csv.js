@@ -34,6 +34,10 @@ export function toCSV(items) {
   return '﻿' + rows.join('\r\n') + '\r\n';
 }
 
+export function sanitizeFilenamePart(value) {
+  return String(value ?? '').trim().replace(/[\\/:*?"<>|\x00-\x1f]/g, '_').replace(/\s+/g, '_');
+}
+
 export function downloadCSV(items, filename = null) {
   const name = filename || `maple_items_${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.csv`;
   const blob = new Blob([toCSV(items)], { type: 'text/csv;charset=utf-8' });

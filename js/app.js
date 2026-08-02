@@ -3,8 +3,9 @@ import { segmentLines } from './segment.js';
 import { GlyphBank, recognizeLines } from './ocr.js';
 import { parseTooltip } from './parse.js';
 import { findTooltip, countStars, TOOLTIP_MIN_W } from './detect.js';
-import { downloadCSV } from './csv.js';
+import { downloadCSV, sanitizeFilenamePart } from './csv.js';
 import * as store from './store.js';
+import { CLASSES, classMainStat, flameUnsupportedReason } from './classes.js';
 import { CaptureController, installDropPaste } from './capture.js';
 import { parseRankingCSV, buildPlan, partOf, nearestLv, excludeReason, TABLE_LVS } from './enhance.js';
 import {
@@ -21,6 +22,7 @@ let bank = new GlyphBank(null);
 let items = store.loadItems();
 let pending = []; // 未知グリフ待ちのcrop [{img, bbox, stars}]
 const itemKeys = new Set(items.map(itemKey));
+let scouterUi = null;
 
 function itemKey(it) {
   return [it.item_name, it.star_count, it.str_total, it.dex_total, it.int_total, it.luk_total,
@@ -265,9 +267,216 @@ function esc(s) {
   return String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
 }
 
+function currentCharacter() {
+  const id = store.getActiveCharacterId();
+  return store.listCharacters().find((c) => c.id === id) || store.listCharacters()[0];
+}
+
+function activeClassName() {
+  return currentCharacter()?.class || '';
+}
+
+function classDerivedAxes(className = activeClassName()) {
+  if (!className) return null;
+  const mainStat = classMainStat(className);
+  if (!mainStat) {
+    return { className, unsupportedReason: flameUnsupportedReason(className) };
+  }
+  return {
+    className,
+    mainStat,
+    secondaryStat: DEFAULT_SECONDARY[mainStat],
+    attackType: mainStat === 'INT' ? 'magic_att' : 'attack_power',
+  };
+}
+
+function characterLabel(character) {
+  const name = character?.name || '(名称未設定)';
+  return character?.class ? `${name} (${character.class})` : name;
+}
+
+function activeCharacterNameForFile() {
+  const name = sanitizeFilenamePart(currentCharacter()?.name);
+  return name ? `_${name}` : '';
+}
+
+function formatBytes(bytes) {
+  if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(2)} MB`;
+  return `${(bytes / 1024).toFixed(1)} KB`;
+}
+
+function estimateLocalStorageBytes() {
+  let total = 0;
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    total += (key.length + (localStorage.getItem(key)?.length || 0)) * 2;
+  }
+  return total;
+}
+
 function updateMeta() {
   $('info-count').textContent = items.length;
   $('bank-info').textContent = `${bank.size} glyphs`;
+}
+
+function renderCharacterControls() {
+  const deferred = store.isMigrationDeferred();
+  const chars = store.listCharacters();
+  const activeId = store.getActiveCharacterId();
+  $('char-select').innerHTML = chars
+    .map((c) => `<option value="${esc(c.id)}">${esc(characterLabel(c))}</option>`)
+    .join('');
+  $('char-select').value = activeId;
+  const active = chars.find((c) => c.id === activeId) || chars[0];
+  $('char-class').value = active?.class || '';
+  for (const id of ['char-select', 'char-class', 'btn-char-manage']) $(id).disabled = deferred;
+  $('char-warning').style.display = deferred ? 'block' : 'none';
+  $('char-warning').textContent = deferred
+    ? '保存容量が不足しているためキャラ機能を利用できません。不要な装備やスナップショットを削除してページを再読み込みしてください。'
+    : '';
+}
+
+function resetCharacterRuntimeState() {
+  capture.processed.length = 0;
+  pending = [];
+  items = store.loadItems();
+  itemKeys.clear();
+  for (const it of items) itemKeys.add(itemKey(it));
+  flameSettings = loadStoredFlameSettings();
+  $('plan-stat').value = flameSettings.mainStat;
+  syncFlameControls();
+  scouterUi?.resetForCharacterSwitch();
+  render();
+  refreshSnapshots();
+  renderCharacterControls();
+}
+
+function commitClassInput() {
+  if (store.isMigrationDeferred()) return;
+  const activeId = store.getActiveCharacterId();
+  const value = $('char-class').value.trim();
+  const active = currentCharacter();
+  if (!value) {
+    store.setCharacterClass(activeId, null);
+    renderCharacterControls();
+    renderCharacterModal();
+    flameSettings = loadStoredFlameSettings();
+    syncFlameControls();
+    renderPlan();
+    return;
+  }
+  if (!CLASSES.includes(value)) {
+    $('char-class').value = active?.class || '';
+    toast('Class は候補から選択してください', 'warn');
+    return;
+  }
+  store.setCharacterClass(activeId, value);
+  applyClassDerivedSettingsAfterChange(value);
+  renderCharacterControls();
+  renderCharacterModal();
+}
+
+function applyClassDerivedSettingsAfterChange(className) {
+  const derived = classDerivedAxes(className);
+  if (!derived?.mainStat) {
+    syncFlameControls();
+    renderFlamePlan();
+    toast(derived?.unsupportedReason || `Class を ${className} に変更しました`);
+    return;
+  }
+  flameSettings = normalizeFlameSettings({
+    ...flameSettings,
+    mainStat: derived.mainStat,
+    secondaryStat: derived.secondaryStat,
+    attackType: derived.attackType,
+  });
+  store.saveFlameSettings(flameSettings);
+  syncFlameControls();
+  renderPlan();
+  toast(`Class を ${className} に変更しました (主ステ ${derived.mainStat} / 副ステ ${derived.secondaryStat} / ${derived.attackType === 'magic_att' ? 'MATT' : 'ATT'})`);
+}
+
+function renderCharacterModal() {
+  if (!$('char-back').classList.contains('show')) return;
+  const usage = store.characterStorageUsage();
+  const activeId = store.getActiveCharacterId();
+  const total = estimateLocalStorageBytes();
+  const limit = 5 * 1024 * 1024;
+  $('char-storage-summary').textContent =
+    `localStorage 使用量: ${formatBytes(total)} / ${formatBytes(limit)}${total > limit * 0.85 ? '  容量が少なくなっています' : ''}`;
+  let html = '<table><thead><tr><th></th><th>名前</th><th>Class</th><th>装備</th><th>スナップショット</th><th>容量</th><th>削除</th></tr></thead><tbody>';
+  for (const c of usage) {
+    html += `<tr data-char-id="${esc(c.id)}">` +
+      `<td class="active-mark">${c.id === activeId ? '●' : ''}</td>` +
+      `<td><input type="text" data-field="name" value="${esc(c.name)}"></td>` +
+      `<td><input type="text" data-field="class" list="class-list" value="${esc(c.class || '')}"></td>` +
+      `<td class="num">${c.items}</td>` +
+      `<td class="num">${c.snapshots}</td>` +
+      `<td class="num">${formatBytes(c.bytes)}</td>` +
+      `<td><button class="danger" data-act="delete">削除</button></td>` +
+      '</tr>';
+  }
+  html += '</tbody></table>';
+  $('char-table-wrap').innerHTML = html;
+}
+
+function commitModalEdit(input) {
+  const id = input.closest('tr')?.dataset.charId;
+  if (!id) return;
+  const value = input.value.trim();
+  if (input.dataset.field === 'name') {
+    store.renameCharacter(id, input.value);
+  } else if (!value) {
+    store.setCharacterClass(id, null);
+  } else if (CLASSES.includes(value)) {
+    store.setCharacterClass(id, value);
+  } else {
+    const current = store.listCharacters().find((c) => c.id === id);
+    input.value = current?.class || '';
+    toast('Class は候補から選択してください', 'warn');
+    return;
+  }
+  if (id === store.getActiveCharacterId()) {
+    if (value) applyClassDerivedSettingsAfterChange(value);
+    else {
+      flameSettings = loadStoredFlameSettings();
+      syncFlameControls();
+      renderPlan();
+    }
+  }
+  renderCharacterControls();
+  renderCharacterModal();
+}
+
+function deleteCharacterFromModal(id) {
+  const usage = store.characterStorageUsage().find((c) => c.id === id);
+  if (!usage) return;
+  const details = [
+    `キャラ「${usage.name || '(名称未設定)'}」を削除します。`,
+    `装備${usage.items}件・スナップショット${usage.snapshots}件・スカウター入力${usage.scouterFields}件が消えます。`,
+    '元に戻せません。',
+  ].join('\n');
+  if (!confirm(details)) return;
+  const wasActive = store.getActiveCharacterId() === id;
+  store.deleteCharacter(id);
+  if (wasActive) resetCharacterRuntimeState();
+  else {
+    renderCharacterControls();
+    renderCharacterModal();
+  }
+  toast('キャラを削除しました', 'warn');
+}
+
+function createCharacterFromModal() {
+  if (store.isMigrationDeferred()) return;
+  const name = prompt('新規キャラ名', '');
+  if (name === null) return;
+  const character = store.createCharacter({ name, class: null });
+  if (!character) { toast('キャラを作成できませんでした', 'err'); return; }
+  store.setActiveCharacter(character.id);
+  resetCharacterRuntimeState();
+  renderCharacterModal();
+  toast('新規キャラを作成しました');
 }
 
 $('table-wrap').addEventListener('click', (e) => {
@@ -298,6 +507,48 @@ $('table-wrap').addEventListener('click', (e) => {
 });
 $('zoom-back').addEventListener('click', () => $('zoom-back').classList.remove('show'));
 
+$('class-list').innerHTML = CLASSES.map((name) => `<option value="${esc(name)}"></option>`).join('');
+$('char-select').addEventListener('change', () => {
+  if (store.setActiveCharacter($('char-select').value)) {
+    resetCharacterRuntimeState();
+    toast(`キャラを切り替えました: ${characterLabel(currentCharacter())}`);
+  }
+});
+$('char-class').addEventListener('change', commitClassInput);
+$('char-class').addEventListener('blur', commitClassInput);
+$('char-class').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    commitClassInput();
+    e.target.blur();
+  }
+});
+$('btn-char-manage').addEventListener('click', () => {
+  if (store.isMigrationDeferred()) return;
+  $('char-back').classList.add('show');
+  renderCharacterModal();
+});
+$('btn-char-close').addEventListener('click', () => $('char-back').classList.remove('show'));
+$('char-back').addEventListener('click', (e) => {
+  if (e.target === $('char-back')) $('char-back').classList.remove('show');
+});
+$('btn-char-new').addEventListener('click', createCharacterFromModal);
+$('char-table-wrap').addEventListener('change', (e) => {
+  if (e.target.matches('input[data-field]')) commitModalEdit(e.target);
+});
+$('char-table-wrap').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && e.target.matches('input[data-field]')) {
+    e.preventDefault();
+    commitModalEdit(e.target);
+    e.target.blur();
+  }
+});
+$('char-table-wrap').addEventListener('click', (e) => {
+  const btn = e.target.closest('button[data-act="delete"]');
+  if (!btn) return;
+  deleteCharacterFromModal(btn.closest('tr')?.dataset.charId);
+});
+
 // ---------- タブ・強化プラン ----------
 let rankingTable = [];
 let flameData = null;
@@ -311,13 +562,31 @@ const DEFAULT_FLAME_SETTINGS = {
 function loadStoredFlameSettings() {
   const loaded = store.loadFlameSettings();
   const saved = loaded && typeof loaded === 'object' && !Array.isArray(loaded) ? loaded : {};
-  const normalized = migrateFlameSettings(saved);
+  const derived = classDerivedAxes();
+  const normalized = migrateFlameSettings(derived?.mainStat ? {
+    ...saved,
+    mainStat: derived.mainStat,
+    secondaryStat: derived.secondaryStat,
+    attackType: derived.attackType,
+  } : saved);
   // 旧版で既定値だったALL%=15だけを新しい既定値10へ移行する。
   // 旧保存形式(mainStatなし)は、組合せが食い違わないよう標準ペアへ移行する。
-  if (saved.settingsVersion !== normalized.settingsVersion || saved.allStatWeight !== normalized.allStatWeight) {
+  // normalizeFlameSettings は固定順で返すが、比較は保存形式のキー順に依存しない値比較にする。
+  if (!sameFlameSettings(saved, normalized)) {
     store.saveFlameSettings(normalized);
   }
   return normalized;
+}
+
+function sameFlameSettings(a, b) {
+  return a.settingsVersion === b.settingsVersion &&
+    a.mainStat === b.mainStat &&
+    a.secondaryStat === b.secondaryStat &&
+    Number(a.secondaryWeight) === b.secondaryWeight &&
+    Number(a.allStatWeight) === b.allStatWeight &&
+    Number(a.attackWeight) === b.attackWeight &&
+    a.attackType === b.attackType &&
+    a.sourceType === b.sourceType;
 }
 let flameSettings = loadStoredFlameSettings();
 $('plan-stat').value = flameSettings.mainStat;
@@ -341,7 +610,14 @@ for (const btn of document.querySelectorAll('.tab-btn')) {
 }
 
 function syncFlameControls() {
-  flameSettings = normalizeFlameSettings(flameSettings);
+  const derived = classDerivedAxes();
+  flameSettings = normalizeFlameSettings(derived?.mainStat ? {
+    ...flameSettings,
+    mainStat: derived.mainStat,
+    secondaryStat: derived.secondaryStat,
+    attackType: derived.attackType,
+  } : flameSettings);
+  $('plan-stat').value = flameSettings.mainStat;
   $('flame-secondary-stat').value = flameSettings.secondaryStat;
   for (const option of $('flame-secondary-stat').options) {
     option.disabled = option.value === flameSettings.mainStat;
@@ -351,6 +627,20 @@ function syncFlameControls() {
   $('flame-attack-weight').value = flameSettings.attackWeight;
   $('flame-attack-type').value = flameSettings.attackType;
   $('flame-source-type').value = flameSettings.sourceType;
+  const classLocked = !!derived?.mainStat;
+  const unsupported = !!derived?.unsupportedReason;
+  $('plan-stat').disabled = classLocked;
+  $('flame-secondary-stat').disabled = classLocked || unsupported;
+  $('flame-attack-type').disabled = classLocked || unsupported;
+  for (const id of ['flame-secondary-weight', 'flame-all-weight', 'flame-attack-weight', 'flame-source-type']) {
+    $(id).disabled = unsupported;
+  }
+  $('flame-reset').disabled = unsupported;
+  const note = $('class-derived-note');
+  note.classList.toggle('warn', unsupported);
+  note.textContent = unsupported ? `${derived.unsupportedReason} 強化プランは利用できます。` : derived
+    ? `Class(${derived.className})から自動: 主ステ ${derived.mainStat} / 副ステ ${derived.secondaryStat} / ${derived.attackType === 'magic_att' ? 'MATT' : 'ATT'}`
+    : '';
 }
 
 function numericControl(id, fallback) {
@@ -359,13 +649,14 @@ function numericControl(id, fallback) {
 }
 
 function readFlameControls() {
+  const derived = classDerivedAxes();
   flameSettings = normalizeFlameSettings({
-    mainStat: $('plan-stat').value,
-    secondaryStat: $('flame-secondary-stat').value,
+    mainStat: derived?.mainStat || $('plan-stat').value,
+    secondaryStat: derived?.secondaryStat || $('flame-secondary-stat').value,
     secondaryWeight: numericControl('flame-secondary-weight', 0.1),
     allStatWeight: numericControl('flame-all-weight', 10),
     attackWeight: numericControl('flame-attack-weight', 4),
-    attackType: $('flame-attack-type').value,
+    attackType: derived?.attackType || $('flame-attack-type').value,
     sourceType: $('flame-source-type').value,
   });
   syncFlameControls();
@@ -393,12 +684,13 @@ for (const id of ['flame-secondary-stat', 'flame-secondary-weight', 'flame-all-w
   $(id).addEventListener('change', () => { readFlameControls(); renderFlamePlan(); });
 }
 $('flame-reset').addEventListener('click', () => {
-  const mainStat = $('plan-stat').value;
+  const derived = classDerivedAxes();
+  const mainStat = derived?.mainStat || $('plan-stat').value;
   flameSettings = {
     ...DEFAULT_FLAME_SETTINGS,
     mainStat,
-    secondaryStat: DEFAULT_SECONDARY[mainStat],
-    attackType: mainStat === 'INT' ? 'magic_att' : 'attack_power',
+    secondaryStat: derived?.secondaryStat || DEFAULT_SECONDARY[mainStat],
+    attackType: derived?.attackType || (mainStat === 'INT' ? 'magic_att' : 'attack_power'),
   };
   store.saveFlameSettings(flameSettings);
   syncFlameControls();
@@ -514,6 +806,14 @@ function advantageOptions(resolved) {
 
 function renderFlamePlan() {
   const wrap = $('flame-wrap');
+  const derived = classDerivedAxes();
+  if (derived?.unsupportedReason) {
+    const message = `${derived.unsupportedReason} 強化プランは利用できます。`;
+    wrap.innerHTML = `<div style="color:var(--ink-dim);padding:20px">${esc(message)}</div>`;
+    $('flame-summary').textContent = '転生更新チェック非対応';
+    $('flame-notes').textContent = message;
+    return;
+  }
   if (!flameData) {
     const message = flameDataState === 'error'
       ? '転生確率データの読み込みに失敗しました。ページを再読み込みしてください。'
@@ -835,7 +1135,7 @@ $('btn-frame-save-delay').addEventListener('click', () => {
 // ---------- CSV / スナップショット / エクスポート ----------
 $('btn-csv').addEventListener('click', () => {
   if (!items.length) { toast('アイテムがありません', 'warn'); return; }
-  downloadCSV(items);
+  downloadCSV(items, `maple_items${activeCharacterNameForFile()}_${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.csv`);
 });
 
 function refreshSnapshots() {
@@ -892,16 +1192,19 @@ $('import-file').addEventListener('change', async (e) => {
   if (!f) return;
   try {
     const summary = store.importAll(await f.text(), true);
+    renderCharacterControls();
     items = store.loadItems();
     flameSettings = loadStoredFlameSettings();
     $('plan-stat').value = flameSettings.mainStat;
     syncFlameControls();
     itemKeys.clear();
     for (const it of items) itemKeys.add(itemKey(it));
+    scouterUi?.resetForCharacterSwitch();
     for (const [k, v] of Object.entries(store.loadUserBank())) bank.add(k, v);
     render();
     refreshSnapshots();
-    toast(`インポート: アイテム${summary.items}件 / スナップショット${summary.snapshots}件`);
+    const switched = summary.activeCharacterName ? ` · 「${summary.activeCharacterName}」に切り替えました` : '';
+    toast(`インポート: キャラ 新規${summary.characters}件 / 更新${summary.updated}件 / アイテム${summary.items}件 / スナップショット${summary.snapshots}件${switched}`);
   } catch {
     toast('インポートに失敗しました(JSON形式を確認)', 'err');
   }
@@ -1010,7 +1313,7 @@ async function migrateThumbs() {
   renderColPanel();
   render();
   refreshSnapshots();
-  initScouterUI({
+  scouterUi = initScouterUI({
     toast,
     copyText,
     chime,
@@ -1025,5 +1328,6 @@ async function migrateThumbs() {
       onFrame: (fn) => { statHandler = fn; },
     },
   });
+  renderCharacterControls();
   migrateThumbs();
 })();
