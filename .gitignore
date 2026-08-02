@@ -3,3 +3,4 @@ node_modules/
 temp/
 _codex_*
 .codex/
+.claude/settings.local.json
