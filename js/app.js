@@ -5,7 +5,7 @@ import { parseTooltip } from './parse.js';
 import { findTooltip, countStars, TOOLTIP_MIN_W } from './detect.js';
 import { downloadCSV, sanitizeFilenamePart } from './csv.js';
 import * as store from './store.js';
-import { CLASSES } from './classes.js';
+import { CLASSES, classMainStat, flameUnsupportedReason } from './classes.js';
 import { CaptureController, installDropPaste } from './capture.js';
 import { parseRankingCSV, buildPlan, partOf, nearestLv, excludeReason, TABLE_LVS } from './enhance.js';
 import {
@@ -272,6 +272,24 @@ function currentCharacter() {
   return store.listCharacters().find((c) => c.id === id) || store.listCharacters()[0];
 }
 
+function activeClassName() {
+  return currentCharacter()?.class || '';
+}
+
+function classDerivedAxes(className = activeClassName()) {
+  if (!className) return null;
+  const mainStat = classMainStat(className);
+  if (!mainStat) {
+    return { className, unsupportedReason: flameUnsupportedReason(className) };
+  }
+  return {
+    className,
+    mainStat,
+    secondaryStat: DEFAULT_SECONDARY[mainStat],
+    attackType: mainStat === 'INT' ? 'magic_att' : 'attack_power',
+  };
+}
+
 function characterLabel(character) {
   const name = character?.name || '(名称未設定)';
   return character?.class ? `${name} (${character.class})` : name;
@@ -342,6 +360,9 @@ function commitClassInput() {
     store.setCharacterClass(activeId, null);
     renderCharacterControls();
     renderCharacterModal();
+    flameSettings = loadStoredFlameSettings();
+    syncFlameControls();
+    renderPlan();
     return;
   }
   if (!CLASSES.includes(value)) {
@@ -350,8 +371,29 @@ function commitClassInput() {
     return;
   }
   store.setCharacterClass(activeId, value);
+  applyClassDerivedSettingsAfterChange(value);
   renderCharacterControls();
   renderCharacterModal();
+}
+
+function applyClassDerivedSettingsAfterChange(className) {
+  const derived = classDerivedAxes(className);
+  if (!derived?.mainStat) {
+    syncFlameControls();
+    renderFlamePlan();
+    toast(derived?.unsupportedReason || `Class を ${className} に変更しました`);
+    return;
+  }
+  flameSettings = normalizeFlameSettings({
+    ...flameSettings,
+    mainStat: derived.mainStat,
+    secondaryStat: derived.secondaryStat,
+    attackType: derived.attackType,
+  });
+  store.saveFlameSettings(flameSettings);
+  syncFlameControls();
+  renderPlan();
+  toast(`Class を ${className} に変更しました (主ステ ${derived.mainStat} / 副ステ ${derived.secondaryStat} / ${derived.attackType === 'magic_att' ? 'MATT' : 'ATT'})`);
 }
 
 function renderCharacterModal() {
@@ -393,6 +435,14 @@ function commitModalEdit(input) {
     input.value = current?.class || '';
     toast('Class は候補から選択してください', 'warn');
     return;
+  }
+  if (id === store.getActiveCharacterId()) {
+    if (value) applyClassDerivedSettingsAfterChange(value);
+    else {
+      flameSettings = loadStoredFlameSettings();
+      syncFlameControls();
+      renderPlan();
+    }
   }
   renderCharacterControls();
   renderCharacterModal();
@@ -511,13 +561,31 @@ const DEFAULT_FLAME_SETTINGS = {
 function loadStoredFlameSettings() {
   const loaded = store.loadFlameSettings();
   const saved = loaded && typeof loaded === 'object' && !Array.isArray(loaded) ? loaded : {};
-  const normalized = migrateFlameSettings(saved);
+  const derived = classDerivedAxes();
+  const normalized = migrateFlameSettings(derived?.mainStat ? {
+    ...saved,
+    mainStat: derived.mainStat,
+    secondaryStat: derived.secondaryStat,
+    attackType: derived.attackType,
+  } : saved);
   // 旧版で既定値だったALL%=15だけを新しい既定値10へ移行する。
   // 旧保存形式(mainStatなし)は、組合せが食い違わないよう標準ペアへ移行する。
-  if (saved.settingsVersion !== normalized.settingsVersion || saved.allStatWeight !== normalized.allStatWeight) {
+  // normalizeFlameSettings は固定順で返すが、比較は保存形式のキー順に依存しない値比較にする。
+  if (!sameFlameSettings(saved, normalized)) {
     store.saveFlameSettings(normalized);
   }
   return normalized;
+}
+
+function sameFlameSettings(a, b) {
+  return a.settingsVersion === b.settingsVersion &&
+    a.mainStat === b.mainStat &&
+    a.secondaryStat === b.secondaryStat &&
+    Number(a.secondaryWeight) === b.secondaryWeight &&
+    Number(a.allStatWeight) === b.allStatWeight &&
+    Number(a.attackWeight) === b.attackWeight &&
+    a.attackType === b.attackType &&
+    a.sourceType === b.sourceType;
 }
 let flameSettings = loadStoredFlameSettings();
 $('plan-stat').value = flameSettings.mainStat;
@@ -541,7 +609,14 @@ for (const btn of document.querySelectorAll('.tab-btn')) {
 }
 
 function syncFlameControls() {
-  flameSettings = normalizeFlameSettings(flameSettings);
+  const derived = classDerivedAxes();
+  flameSettings = normalizeFlameSettings(derived?.mainStat ? {
+    ...flameSettings,
+    mainStat: derived.mainStat,
+    secondaryStat: derived.secondaryStat,
+    attackType: derived.attackType,
+  } : flameSettings);
+  $('plan-stat').value = flameSettings.mainStat;
   $('flame-secondary-stat').value = flameSettings.secondaryStat;
   for (const option of $('flame-secondary-stat').options) {
     option.disabled = option.value === flameSettings.mainStat;
@@ -551,6 +626,20 @@ function syncFlameControls() {
   $('flame-attack-weight').value = flameSettings.attackWeight;
   $('flame-attack-type').value = flameSettings.attackType;
   $('flame-source-type').value = flameSettings.sourceType;
+  const classLocked = !!derived?.mainStat;
+  const unsupported = !!derived?.unsupportedReason;
+  $('plan-stat').disabled = classLocked;
+  $('flame-secondary-stat').disabled = classLocked || unsupported;
+  $('flame-attack-type').disabled = classLocked || unsupported;
+  for (const id of ['flame-secondary-weight', 'flame-all-weight', 'flame-attack-weight', 'flame-source-type']) {
+    $(id).disabled = unsupported;
+  }
+  $('flame-reset').disabled = unsupported;
+  const note = $('class-derived-note');
+  note.classList.toggle('warn', unsupported);
+  note.textContent = unsupported ? `${derived.unsupportedReason} 強化プランは利用できます。` : derived
+    ? `Class(${derived.className})から自動: 主ステ ${derived.mainStat} / 副ステ ${derived.secondaryStat} / ${derived.attackType === 'magic_att' ? 'MATT' : 'ATT'}`
+    : '';
 }
 
 function numericControl(id, fallback) {
@@ -559,13 +648,14 @@ function numericControl(id, fallback) {
 }
 
 function readFlameControls() {
+  const derived = classDerivedAxes();
   flameSettings = normalizeFlameSettings({
-    mainStat: $('plan-stat').value,
-    secondaryStat: $('flame-secondary-stat').value,
+    mainStat: derived?.mainStat || $('plan-stat').value,
+    secondaryStat: derived?.secondaryStat || $('flame-secondary-stat').value,
     secondaryWeight: numericControl('flame-secondary-weight', 0.1),
     allStatWeight: numericControl('flame-all-weight', 10),
     attackWeight: numericControl('flame-attack-weight', 4),
-    attackType: $('flame-attack-type').value,
+    attackType: derived?.attackType || $('flame-attack-type').value,
     sourceType: $('flame-source-type').value,
   });
   syncFlameControls();
@@ -587,12 +677,13 @@ for (const id of ['flame-secondary-stat', 'flame-secondary-weight', 'flame-all-w
   $(id).addEventListener('change', () => { readFlameControls(); renderFlamePlan(); });
 }
 $('flame-reset').addEventListener('click', () => {
-  const mainStat = $('plan-stat').value;
+  const derived = classDerivedAxes();
+  const mainStat = derived?.mainStat || $('plan-stat').value;
   flameSettings = {
     ...DEFAULT_FLAME_SETTINGS,
     mainStat,
-    secondaryStat: DEFAULT_SECONDARY[mainStat],
-    attackType: mainStat === 'INT' ? 'magic_att' : 'attack_power',
+    secondaryStat: derived?.secondaryStat || DEFAULT_SECONDARY[mainStat],
+    attackType: derived?.attackType || (mainStat === 'INT' ? 'magic_att' : 'attack_power'),
   };
   store.saveFlameSettings(flameSettings);
   syncFlameControls();
@@ -702,6 +793,14 @@ function advantageOptions(resolved) {
 
 function renderFlamePlan() {
   const wrap = $('flame-wrap');
+  const derived = classDerivedAxes();
+  if (derived?.unsupportedReason) {
+    const message = `${derived.unsupportedReason} 強化プランは利用できます。`;
+    wrap.innerHTML = `<div style="color:var(--ink-dim);padding:20px">${esc(message)}</div>`;
+    $('flame-summary').textContent = '転生更新チェック非対応';
+    $('flame-notes').textContent = message;
+    return;
+  }
   if (!flameData) {
     const message = flameDataState === 'error'
       ? '転生確率データの読み込みに失敗しました。ページを再読み込みしてください。'

@@ -314,6 +314,10 @@ td.del:hover { opacity: 1; }
 .flame-controls select { min-width: 86px; }
 .flame-controls #flame-source-type { min-width: 160px; }
 .flame-controls button { padding: 6px 10px; font-size: 11px; }
+.class-derived-note {
+  align-self: center; color: var(--cyan); font-size: 11.5px; line-height: 1.6;
+}
+.class-derived-note.warn { color: var(--orange); }
 .flame-reference-note {
   position: relative; display: inline-block; margin-bottom: 10px; color: var(--orange); font-size: 11.5px;
 }

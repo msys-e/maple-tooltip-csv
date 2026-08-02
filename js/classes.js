@@ -53,3 +53,73 @@ export const CLASSES = [
   'Xenon',
   'Zero',
 ];
+
+export const CLASS_MAIN_STATS = {
+  Adele: 'STR',
+  'Angelic Buster': 'DEX',
+  Aran: 'STR',
+  Ark: 'STR',
+  'Battle Mage': 'INT',
+  Bishop: 'INT',
+  Blaster: 'STR',
+  'Blaze Wizard': 'INT',
+  Bowmaster: 'DEX',
+  Buccaneer: 'STR',
+  Cadena: 'LUK',
+  Cannoneer: 'STR',
+  Corsair: 'DEX',
+  'Dark Knight': 'STR',
+  'Dawn Warrior': 'STR',
+  'Demon Avenger': null,
+  'Demon Slayer': 'STR',
+  'Dual Blade': 'LUK',
+  Erel: 'STR',
+  Evan: 'INT',
+  'Fire/Poison Mage': 'INT',
+  Hayato: 'STR',
+  Hero: 'STR',
+  Hoyoung: 'LUK',
+  'Ice/Lightning Mage': 'INT',
+  Illium: 'INT',
+  Kain: 'DEX',
+  Kaiser: 'STR',
+  Kanna: 'INT',
+  Khali: 'LUK',
+  Kinesis: 'INT',
+  Lara: 'INT',
+  Luminous: 'INT',
+  Lynn: 'INT',
+  Marksman: 'DEX',
+  Mechanic: 'DEX',
+  Mercedes: 'DEX',
+  Mihile: 'STR',
+  'Mo Xuan': 'STR',
+  'Night Lord': 'LUK',
+  'Night Walker': 'LUK',
+  Paladin: 'STR',
+  Pathfinder: 'DEX',
+  Phantom: 'LUK',
+  Ren: 'STR',
+  Shade: 'STR',
+  Shadower: 'LUK',
+  'Sia Astelle': 'INT',
+  'Thunder Breaker': 'STR',
+  'Wild Hunter': 'DEX',
+  'Wind Archer': 'DEX',
+  Xenon: null,
+  Zero: 'STR',
+};
+
+export function classMainStat(className) {
+  return Object.hasOwn(CLASS_MAIN_STATS, className) ? CLASS_MAIN_STATS[className] : undefined;
+}
+
+export function flameUnsupportedReason(className) {
+  if (className === 'Demon Avenger') {
+    return 'Demon Avenger は主ステータスがHPのため、転生更新チェックに対応していません。';
+  }
+  if (className === 'Xenon') {
+    return 'Xenon は STR/DEX/LUK の3ステータス構成のため、転生更新チェックに対応していません。';
+  }
+  return '';
+}
