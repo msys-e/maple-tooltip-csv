@@ -148,6 +148,19 @@ function fillForm(values) {
   return n;
 }
 
+function resetForCharacterSwitch() {
+  stopOcr({ quiet: true });
+  form = store.loadScouter();
+  if (!form || typeof form !== 'object') form = { slot: '1', values: {} };
+  if (!SLOTS.includes(String(form.slot))) form.slot = '1';
+  if (!form.values || typeof form.values !== 'object') form.values = {};
+  renderForm();
+  $('scouter-slot').value = form.slot;
+  updateSlotLabels(form.slot);
+  $('scouter-out').style.display = 'none';
+  renderSteps();
+}
+
 // CaptureController から安定フレームごとに呼ばれる。
 // 戻り値 'lowq' は「処理済みにせず次フレームで再試行」の意(既存の装備取り込みと同じ約束)
 // レベルはSTATウィンドウではなく CHARACTER INFO の「Lv. NNN」バッジにあるので、
@@ -293,4 +306,5 @@ export function initScouterUI(deps = {}) {
     });
   }
   renderSteps();
+  return { resetForCharacterSwitch };
 }
