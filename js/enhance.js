@@ -171,6 +171,28 @@ export function effectivePlanCost(row, { cubeSale = false } = {}) {
   };
 }
 
+// 設定名だけが異なる同一結果を、設定の差を残したまま1アクションへまとめる。
+// "1144 / モード4" と "4444 / モード4" のように共通の補足がある場合は、
+// 差分だけを "1144 / 4444（同一結果）" と表示する。
+function equivalentSettingLabel(settings) {
+  if (settings.length <= 1) return settings[0] || '';
+  const parts = settings.map((setting) => String(setting ?? '').split(/\s*\/\s*/));
+  const suffix = parts[0].slice(1).join(' / ');
+  const hasCommonSuffix = suffix.length > 0 &&
+    parts.every((part) => part.length > 1 && part.slice(1).join(' / ') === suffix);
+  const labels = hasCommonSuffix ? parts.map((part) => part[0]) : settings;
+  return `${labels.join(' / ')}（同一結果）`;
+}
+
+function samePlanResult(a, b) {
+  return a.immediate === b.immediate &&
+    a.discounted === b.discounted &&
+    a.row.item === b.row.item &&
+    a.meso === b.meso &&
+    a.row.score === b.row.score &&
+    a.mps === b.mps;
+}
+
 // プラン構築: 全装備×全行の適用可能ペアを実効コスト順に
 // 現状と開始条件が一致する行がない装備・強化種類では、最も効率のよい将来行を
 // 優先候補として1件だけ通常表示する。includeFuture=true なら残りの将来行も全て出す。
@@ -181,12 +203,25 @@ export function buildPlan(items, table, mainStat, { includeFuture = false, cubeS
     for (const row of table) {
       const step = planStep(item, row, mainStat);
       if (step === 'next' || step === 'future') {
-        candidates.push({
+        const entry = {
           item,
           row,
           immediate: step === 'next',
+          equivalentSettings: [row.setting],
           ...effectivePlanCost(row, { cubeSale }),
-        });
+        };
+        const equivalent = candidates.find((candidate) => samePlanResult(candidate, entry));
+        if (!equivalent) {
+          candidates.push(entry);
+          continue;
+        }
+        if (!equivalent.equivalentSettings.includes(row.setting)) {
+          equivalent.equivalentSettings.push(row.setting);
+        }
+        equivalent.row = {
+          ...equivalent.row,
+          setting: equivalentSettingLabel(equivalent.equivalentSettings),
+        };
       }
     }
     for (const kind of ['star', 'pot']) {
