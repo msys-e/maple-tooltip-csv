@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 // planStep / buildPlan のユニットテスト (codexレビューの非blockingメモ対応)
 // 合成した効率表行×装備で star/potential 分岐の回帰を検知する
 import {
@@ -6,6 +7,7 @@ import {
   buildPlan,
   effectivePlanCost,
   nearestLv,
+  parseRankingCSV,
   partOf,
   planStep,
 } from '../js/enhance.js';
@@ -80,6 +82,64 @@ eq('buildPlan includeFuture で future も',
   buildPlan(items, table, 'STR', { includeFuture: true }).length, 4);
 eq('buildPlan immediate フラグ',
   buildPlan(items, table, 'STR', { includeFuture: true }).filter((p) => p.immediate).length, 2);
+
+// 設定名以外の計算結果が完全一致する候補は、同一装備では1アクションにまとめる。
+const duplicateStarRows = [
+  { ...starRow(150, 20, 21), setting: '1144 / モード4', meso: 1.811, score: 67, mps: 27.03 },
+  { ...starRow(150, 20, 21), setting: '4444 / モード4', meso: 1.811, score: 67, mps: 27.03 },
+];
+const duplicateItem = glove({ req_level: 150, star_count: 20 });
+const deduplicated = buildPlan([duplicateItem], duplicateStarRows, 'STR');
+assert.equal(deduplicated.length, 1);
+assert.equal(deduplicated[0].row.setting, '1144 / 4444（同一結果）');
+assert.deepEqual(deduplicated[0].equivalentSettings, ['1144 / モード4', '4444 / モード4']);
+assert.deepEqual(duplicateStarRows.map((row) => row.setting), ['1144 / モード4', '4444 / モード4']);
+assert.equal(buildPlan([duplicateItem], duplicateStarRows, 'STR')[0].row.setting, '1144 / 4444（同一結果）');
+
+// 数値として等価な+0/-0は統合し、計算不能なNaN同士は同一結果とみなさない。
+const signedZeroResults = [
+  { ...duplicateStarRows[0], setting: '正のゼロ', meso: 0, mps: 0 },
+  { ...duplicateStarRows[0], setting: '負のゼロ', meso: -0, mps: -0 },
+];
+assert.equal(buildPlan([duplicateItem], signedZeroResults, 'STR').length, 1);
+const invalidResults = [
+  { ...duplicateStarRows[0], setting: '不正値A', mps: Number.NaN },
+  { ...duplicateStarRows[0], setting: '不正値B', mps: Number.NaN },
+];
+assert.equal(buildPlan([duplicateItem], invalidResults, 'STR').length, 2);
+
+// 期待メソ・スコア・効率のいずれかが異なる設定は、従来どおり別アクションにする。
+const distinctResults = [
+  { ...duplicateStarRows[0], setting: '基準' },
+  { ...duplicateStarRows[0], setting: '期待メソ違い', meso: 1.812 },
+  { ...duplicateStarRows[0], setting: 'スコア違い', score: 68 },
+  { ...duplicateStarRows[0], setting: '効率違い', mps: 27.04 },
+];
+assert.equal(buildPlan([duplicateItem], distinctResults, 'STR').length, 4);
+
+// 同じ計算結果でも装備が違えば、それぞれ1アクションとして残す。
+assert.equal(buildPlan([duplicateItem, { ...duplicateItem, item_name: 'g2' }], duplicateStarRows, 'STR').length, 2);
+
+// 実データでIssue #4の全8組(Lv150/160/200/250 × 20→21★/21→22★)を回帰確認する。
+const rankingTable = parseRankingCSV(readFileSync(new URL('../data/ranking.csv', import.meta.url), 'utf8'));
+const issue4Items = [150, 160, 200, 250].flatMap((lv) => [20, 21].map((star_count) => ({
+  item_name: `Lv${lv} ★${star_count}`,
+  equip_type: 'Armor / Gloves',
+  req_level: lv,
+  star_count,
+})));
+const issue4Plan = buildPlan(issue4Items, rankingTable, 'STR');
+assert.equal(issue4Plan.length, 8);
+assert.ok(issue4Plan.every((entry) => entry.row.setting === '1144 / 4444（同一結果）'));
+assert.ok(issue4Plan.every((entry) => entry.equivalentSettings.length === 2));
+
+// ★20装備の全段階表示でも、20→21★と将来の21→22★は各装備1行ずつになる。
+const issue4FutureItems = issue4Items.filter((item) => item.star_count === 20);
+const issue4FuturePlan = buildPlan(issue4FutureItems, rankingTable, 'STR', { includeFuture: true });
+const issue4FutureRows = issue4FuturePlan.filter((entry) => entry.row.s0 === 20 || entry.row.s0 === 21);
+assert.equal(issue4FutureRows.length, 8);
+assert.ok(issue4FutureRows.every((entry) => entry.row.setting === '1144 / 4444（同一結果）'));
+assert.ok(issue4FutureRows.every((entry) => entry.equivalentSettings.length === 2));
 
 // --- キューブセール ---
 assert.equal(CUBE_SALE_DISCOUNT, 0.25);
