@@ -5,6 +5,8 @@ import {
   CUBE_SALE_DISCOUNT,
   buildPlan,
   effectivePlanCost,
+  excludeReason,
+  filterPlanByKind,
   nearestLv,
   partOf,
   planStep,
@@ -64,6 +66,14 @@ eq('pot excl 達成済は null',
 // レジェ未達・部位違い
 eq('pot Unique装備は null', planStep(glove({ potential_grade: 'Unique' }), inclRow, 'STR'), null);
 eq('pot 部位違いは null', planStep(glove({ equip_type: 'Armor / Hat' }), inclRow, 'STR'), null);
+const blankPotentialGlove = glove({ pot1_text: '', pot2_text: '', pot3_text: '' });
+eq('pot レジェでも潜在本文0行は null', planStep(blankPotentialGlove, inclRow, 'STR'), null);
+eq('pot 潜在本文0行は再取り込みを案内', excludeReason(blankPotentialGlove, [inclRow], 'STR'),
+  '潜在能力の行が未取得(再取り込みが必要)');
+eq('star スタフォ不可の理由', excludeReason(glove({ no_starforce: 1 }), [starRow(200, 18, 19)], 'STR'),
+  'スタフォ不可');
+eq('star スタフォ数不明の理由', excludeReason(glove({ star_count: '' }), [starRow(200, 18, 19)], 'STR'),
+  'スタフォ数不明(再取り込みが必要)');
 // 主ステ切替: DEX視点だと STR+ALL+DEX → incl=2 (DEX,ALL)
 eq('pot mainStat=DEX でも incl←2 は next', planStep(glove(), potRow(200, '手袋', '主ステ%3ライン(ALLステ%含む)', '2ライン'), 'DEX'), 'next');
 // クリダメ遷移(from側の種別指定)
@@ -80,6 +90,27 @@ eq('buildPlan includeFuture で future も',
   buildPlan(items, table, 'STR', { includeFuture: true }).length, 4);
 eq('buildPlan immediate フラグ',
   buildPlan(items, table, 'STR', { includeFuture: true }).filter((p) => p.immediate).length, 2);
+
+// 現状に一致する開始行がない種類は、最も効率のよい将来行を優先候補として通常表示する。
+const oneLineGlove = glove({ pot1_text: 'STR: +13%', pot2_text: 'DEX: +10%', pot3_text: 'LUK: +10%' });
+const fallbackIncl = { ...inclRow, mps: 30, meso: 3, score: 100 };
+const fallbackExcl = { ...exclRow, mps: 80, meso: 8, score: 100 };
+const fallbackDefault = buildPlan([oneLineGlove], [fallbackIncl, fallbackExcl], 'STR');
+eq('buildPlan 開始行なしは最良の優先候補を1件表示', fallbackDefault.map((p) => p.row.item), [inclRow.item]);
+eq('buildPlan 優先候補はfallbackとして識別',
+  fallbackDefault.map((p) => ({ immediate: p.immediate, recommended: p.recommended, fallback: p.fallback })),
+  [{ immediate: false, recommended: true, fallback: true }]);
+eq('buildPlan 全段階では優先候補と残りを表示',
+  buildPlan([oneLineGlove], [fallbackIncl, fallbackExcl], 'STR', { includeFuture: true })
+    .map((p) => ({ item: p.row.item, recommended: !!p.recommended })),
+  [{ item: inclRow.item, recommended: true }, { item: exclRow.item, recommended: false }]);
+
+// --- 表示種類フィルター ---
+const mixedPlan = buildPlan(items, table, 'STR');
+eq('filterPlanByKind all は全種類', filterPlanByKind(mixedPlan).map((p) => p.row.kind), ['star', 'pot']);
+eq('filterPlanByKind pot はキューブだけ', filterPlanByKind(mixedPlan, 'pot').map((p) => p.row.kind), ['pot']);
+eq('filterPlanByKind star はスタフォだけ', filterPlanByKind(mixedPlan, 'star').map((p) => p.row.kind), ['star']);
+eq('filterPlanByKind 不明値は全種類', filterPlanByKind(mixedPlan, 'unknown').map((p) => p.row.kind), ['star', 'pot']);
 
 // --- キューブセール ---
 assert.equal(CUBE_SALE_DISCOUNT, 0.25);
