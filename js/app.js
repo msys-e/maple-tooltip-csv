@@ -7,7 +7,9 @@ import { downloadCSV, sanitizeFilenamePart } from './csv.js';
 import * as store from './store.js';
 import { CLASSES, classMainStat, flameUnsupportedReason } from './classes.js';
 import { CaptureController, installDropPaste } from './capture.js';
-import { parseRankingCSV, buildPlan, partOf, nearestLv, excludeReason, TABLE_LVS } from './enhance.js';
+import {
+  parseRankingCSV, buildPlan, filterPlanByKind, partOf, nearestLv, excludeReason, TABLE_LVS,
+} from './enhance.js';
 import {
   parseFlameData, flameEligibility, inferFlameAdvantaged, evaluateFlameItem,
   normalizeFlameSettings, migrateFlameSettings, formatFlamePercentile, DEFAULT_SECONDARY,
@@ -554,6 +556,8 @@ let rankingTable = [];
 let flameData = null;
 let flameDataState = 'loading';
 let cubeSaleEnabled = false;
+let planKind = 'all';
+const PLAN_KIND_LABELS = { all: 'すべて', pot: 'キューブのみ', star: 'スタフォのみ' };
 const DEFAULT_FLAME_SETTINGS = {
   settingsVersion: 2,
   mainStat: 'STR', secondaryStat: 'DEX', secondaryWeight: 0.1, allStatWeight: 10,
@@ -679,6 +683,16 @@ $('cube-sale-toggle').addEventListener('click', () => {
   renderEnhancePlan();
 });
 
+for (const btn of document.querySelectorAll('[data-plan-kind]')) {
+  btn.addEventListener('click', () => {
+    planKind = btn.dataset.planKind;
+    document.querySelectorAll('[data-plan-kind]').forEach((candidate) => {
+      candidate.setAttribute('aria-pressed', String(candidate === btn));
+    });
+    renderEnhancePlan();
+  });
+}
+
 for (const id of ['flame-secondary-stat', 'flame-secondary-weight', 'flame-all-weight',
   'flame-attack-weight', 'flame-attack-type', 'flame-source-type']) {
   $(id).addEventListener('change', () => { readFlameControls(); renderFlamePlan(); });
@@ -710,6 +724,49 @@ function renderPlan() {
   renderFlamePlan();
 }
 
+function renderEnhancePlanNotes(plan, mainStat) {
+  // 対象外の注記も表示中の強化種類だけを基準にする。
+  // 非表示側に候補があっても、キューブ本文未取得などの理由を隠さない。
+  const plannedKinds = new Map();
+  for (const entry of plan) {
+    if (!plannedKinds.has(entry.item)) plannedKinds.set(entry.item, new Set());
+    plannedKinds.get(entry.item).add(entry.row.kind);
+  }
+  const relevantTable = planKind === 'all'
+    ? rankingTable
+    : rankingTable.filter((row) => row.kind === planKind);
+  const notes = [];
+  for (const it of items) {
+    const kinds = plannedKinds.get(it) || new Set();
+    if (!kinds.size) {
+      notes.push(`${it.item_name}: ${excludeReason(it, relevantTable, mainStat)}`);
+      continue;
+    }
+    // 「すべて」では片方に候補があっても、もう片方が対象外である理由を隠さない。
+    if (planKind === 'all') {
+      for (const kind of ['pot', 'star']) {
+        if (kinds.has(kind)) continue;
+        const label = kind === 'pot' ? 'キューブ' : 'スタフォ';
+        const table = rankingTable.filter((row) => row.kind === kind);
+        notes.push(`${it.item_name} (${label}): ${excludeReason(it, table, mainStat)}`);
+      }
+    }
+  }
+  const lvNote = items.some((it) => {
+    const lv = it.req_level_base ?? it.req_level;
+    return Number.isFinite(lv) && !TABLE_LVS.includes(lv);
+  }) ? '※表にないLvの装備は最寄りのLv(120→100、140→150等)に丸めて評価しています' : '';
+  const fallbackNote = plan.some((p) => p.fallback)
+    ? '※現状と一致する開始行が効率表にない優先候補は、表示行の開始条件(←2ライン等)を基準にした目安です'
+    : '';
+  const modeNote = planAllSteps
+    ? `※「先」付きは通常の優先候補以外の追加候補です${planKind === 'star' ? '' : '。同じ装備で目標が両立しない行(主ステ%含む/除く、攻撃%/攻撃%orボス等)も並びます'}`
+    : '';
+  $('plan-notes').innerHTML = [lvNote, fallbackNote, modeNote,
+    notes.length ? `対象外: ${notes.map(esc).join(' ／ ')}` : '']
+    .filter(Boolean).join('<br>');
+}
+
 function renderEnhancePlan() {
   const wrap = $('plan-wrap');
   if (!rankingTable.length) {
@@ -719,19 +776,27 @@ function renderEnhancePlan() {
     return;
   }
   const mainStat = $('plan-stat').value;
-  const plan = buildPlan(items, rankingTable, mainStat, {
+  const fullPlan = buildPlan(items, rankingTable, mainStat, {
     includeFuture: planAllSteps,
     cubeSale: cubeSaleEnabled,
   });
+  const plan = filterPlanByKind(fullPlan, planKind);
   const mode = planAllSteps
-    ? `全段階 / 今できる ${plan.filter((p) => p.immediate).length} 件`
-    : '今できる一手のみ';
-  const saleLabel = cubeSaleEnabled ? '・キューブセール25% OFF適用' : '';
+    ? `全段階 / 優先候補 ${plan.filter((p) => p.recommended).length} 件`
+    : '優先候補のみ';
+  const saleLabel = cubeSaleEnabled && planKind !== 'star' ? '・キューブセール25% OFF適用' : '';
+  const kindLabel = PLAN_KIND_LABELS[planKind];
   $('plan-summary').textContent =
-    `対象 ${new Set(plan.map((p) => p.item)).size} 装備 / ${plan.length} アクション (メソ/スコア効率順・${mode}${saleLabel})`;
+    `対象 ${new Set(plan.map((p) => p.item)).size} 装備 / ${plan.length} アクション (${kindLabel}・メソ/スコア効率順・${mode}${saleLabel})`;
+  renderEnhancePlanNotes(plan, mainStat);
   if (!plan.length) {
-    wrap.innerHTML = '<div style="color:var(--ink-dim);padding:20px">適用可能な強化がありません(装備一覧タブで装備を取り込んでください)</div>';
-    $('plan-notes').textContent = '';
+    const emptySubject = planKind === 'pot' ? 'キューブ強化' : planKind === 'star' ? 'スタフォ強化' : '適用可能な強化';
+    const hint = fullPlan.length && planKind !== 'all'
+      ? '「すべて」に切り替えると、ほかの種類の強化を確認できます'
+      : items.length
+        ? '表下の対象外理由を確認してください'
+        : '装備一覧タブで装備を取り込んでください';
+    wrap.innerHTML = `<div style="color:var(--ink-dim);padding:20px">${emptySubject}がありません (${hint})</div>`;
     return;
   }
   let html = '<table><thead><tr><th>#</th><th>アイテム</th><th>部位/Lv</th><th>現状</th><th>強化内容</th><th>設定</th><th>期待メソ(B)</th><th>スコア</th><th class="grp-star">メソ/スコア(M)</th></tr></thead><tbody>';
@@ -740,8 +805,8 @@ function renderEnhancePlan() {
     const cur = r.kind === 'star' ? `★${it.star_count}` : potSummary(it);
     const meso = Number(p.meso.toFixed(3));
     const mps = Number(p.mps.toFixed(2));
-    // 全段階モードでは「今すぐ実行できる行」と「先の段階」を見分けられるようにする
-    const future = p.immediate === false;
+    // 通常表示する候補は既存行と同じ無印、全段階で追加される将来行だけ「先」と示す。
+    const future = !p.recommended;
     const badge = future ? '<span class="plan-later">先</span>' : '';
     html += `<tr${future ? ' class="plan-future"' : ''}>` +
       `<td class="rank">${i + 1}</td>` +
@@ -756,22 +821,6 @@ function renderEnhancePlan() {
   });
   html += '</tbody></table>';
   wrap.innerHTML = html;
-  // 対象外の注記(適用行が1つもない装備のみ)
-  const planned = new Set(plan.map((p) => p.item));
-  const notes = [];
-  for (const it of items) {
-    if (planned.has(it)) continue;
-    notes.push(`${it.item_name}: ${excludeReason(it, rankingTable, mainStat)}`);
-  }
-  const lvNote = items.some((it) => {
-    const lv = it.req_level_base ?? it.req_level;
-    return Number.isFinite(lv) && !TABLE_LVS.includes(lv);
-  }) ? '※表にないLvの装備は最寄りのLv(120→100、140→150等)に丸めて評価しています' : '';
-  const modeNote = planAllSteps
-    ? '※「先」付きは今すぐ実行できない先の段階です。同じ装備で目標が両立しない行(主ステ%含む/除く、攻撃%/攻撃%orボス等)も並びます'
-    : '';
-  $('plan-notes').innerHTML = [lvNote, modeNote, notes.length ? `対象外: ${notes.map(esc).join(' ／ ')}` : '']
-    .filter(Boolean).join('<br>');
 }
 
 function fmtScore(n) {

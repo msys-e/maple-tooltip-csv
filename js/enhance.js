@@ -100,6 +100,10 @@ export function countPotLines(item, lineKind, mainStat) {
   return n;
 }
 
+function hasPotentialText(item) {
+  return [1, 2, 3].some((n) => String(item[`pot${n}_text`] || '').trim());
+}
+
 // 1装備×1行の段階判定
 //   'next'   … 今すぐ実行できる(現状がその行の開始条件そのもの)
 //   'future' … この装備で先々到達しうる(今の状態より先の段階)
@@ -122,6 +126,9 @@ export function planStep(item, row, mainStat) {
     if (partOf(item.equip_type) !== row.part) return null;
     // 表のコストはレジェンダリー前提。未到達の装備は先にレジェ到達が必要なので対象外(注記で案内)
     if (!/Legendary/i.test(item.potential_grade || '')) return null;
+    // 等級だけ取れて本文が0行の場合、0ライン完成品ではなくOCR不足として扱う。
+    // 全段階表示で根拠のない将来候補を並べないため、再取り込みまで対象外にする。
+    if (!hasPotentialText(item)) return null;
     const goal = goalSpec(row.goal);
     const from = fromSpec(row.from);
     if (!goal || !from) return null;
@@ -187,14 +194,15 @@ function samePlanResult(a, b) {
 }
 
 // プラン構築: 全装備×全行の適用可能ペアを実効コスト順に
-// includeFuture=true で「今の一手」だけでなく、その装備で先々到達しうる段階も全て出す
+// 現状と開始条件が一致する行がない装備・強化種類では、最も効率のよい将来行を
+// 優先候補として1件だけ通常表示する。includeFuture=true なら残りの将来行も全て出す。
 export function buildPlan(items, table, mainStat, { includeFuture = false, cubeSale = false } = {}) {
   const plan = [];
   for (const item of items) {
-    const itemPlan = [];
+    const candidates = [];
     for (const row of table) {
       const step = planStep(item, row, mainStat);
-      if (step === 'next' || (includeFuture && step === 'future')) {
+      if (step === 'next' || step === 'future') {
         const entry = {
           item,
           row,
@@ -202,9 +210,9 @@ export function buildPlan(items, table, mainStat, { includeFuture = false, cubeS
           equivalentSettings: [row.setting],
           ...effectivePlanCost(row, { cubeSale }),
         };
-        const equivalent = itemPlan.find((candidate) => samePlanResult(candidate, entry));
+        const equivalent = candidates.find((candidate) => samePlanResult(candidate, entry));
         if (!equivalent) {
-          itemPlan.push(entry);
+          candidates.push(entry);
           continue;
         }
         if (!equivalent.equivalentSettings.includes(row.setting)) {
@@ -216,10 +224,30 @@ export function buildPlan(items, table, mainStat, { includeFuture = false, cubeS
         };
       }
     }
-    plan.push(...itemPlan);
+    for (const kind of ['star', 'pot']) {
+      const sameKind = candidates.filter((entry) => entry.row.kind === kind);
+      if (!sameKind.length) continue;
+      const immediate = sameKind.filter((entry) => entry.immediate);
+      if (immediate.length) {
+        immediate.forEach((entry) => { entry.recommended = true; });
+      } else {
+        const fallback = sameKind.reduce((best, entry) => entry.mps < best.mps ? entry : best);
+        fallback.recommended = true;
+        fallback.fallback = true;
+      }
+      for (const entry of sameKind) {
+        if (entry.recommended || includeFuture) plan.push(entry);
+      }
+    }
   }
   plan.sort((a, b) => a.mps - b.mps);
   return plan;
+}
+
+// 計算済みの効率順を保ったまま、表示する強化種類だけを絞り込む。
+export function filterPlanByKind(plan, kind = 'all') {
+  if (kind !== 'pot' && kind !== 'star') return plan;
+  return plan.filter((entry) => entry.row.kind === kind);
 }
 
 // 対象外の理由(タブ下部の注記用)。適用行が1つもない装備に呼ぶ
@@ -227,9 +255,21 @@ export function excludeReason(item, table, mainStat) {
   const lv = nearestLv(item.req_level_base ?? item.req_level);
   if (lv === null) return '装備Lv不明(再取り込みが必要)';
   const part = partOf(item.equip_type);
-  if (part && table.some((r) => r.kind === 'pot' && r.part === part) &&
-      !/Legendary/i.test(item.potential_grade || '')) {
-    return `潜在等級がレジェンダリー未達(${item.potential_grade || '不明'})`;
+  const hasPotRows = table.some((r) => r.kind === 'pot');
+  const hasStarRows = table.some((r) => r.kind === 'star');
+  if (part && table.some((r) => r.kind === 'pot' && r.part === part)) {
+    if (!/Legendary/i.test(item.potential_grade || '')) {
+      return `潜在等級がレジェンダリー未達(${item.potential_grade || '不明'})`;
+    }
+    if (!hasPotentialText(item)) return '潜在能力の行が未取得(再取り込みが必要)';
+  }
+  if (hasStarRows && !hasPotRows) {
+    if (item.no_starforce) return 'スタフォ不可';
+    if (item.star_count === '' || item.star_count === null || item.star_count === undefined ||
+        !Number.isFinite(Number(item.star_count))) {
+      return 'スタフォ数不明(再取り込みが必要)';
+    }
+    return '適用可能なスタフォ行なし(目標達成済み or 表に該当Lvの行なし)';
   }
   return '適用可能な行なし(目標達成済み or 表に該当Lv/部位の行なし)';
 }
